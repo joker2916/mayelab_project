@@ -7,8 +7,8 @@ class JournalPage extends StatelessWidget {
   const JournalPage({super.key, required this.db});
 
   Future<void> _showAddDialog(BuildContext context) async {
-    final _libelleCtrl = TextEditingController();
-    final _refCtrl = TextEditingController();
+    final libelleCtrl = TextEditingController();
+    final refCtrl = TextEditingController();
 
     await showDialog<void>(
       context: context,
@@ -18,11 +18,11 @@ class JournalPage extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
-              controller: _libelleCtrl,
+              controller: libelleCtrl,
               decoration: const InputDecoration(labelText: 'Libellé'),
             ),
             TextField(
-              controller: _refCtrl,
+              controller: refCtrl,
               decoration: const InputDecoration(
                 labelText: 'Référence (optionnelle)',
               ),
@@ -36,9 +36,9 @@ class JournalPage extends StatelessWidget {
           ),
           ElevatedButton(
             onPressed: () async {
-              final libelle = _libelleCtrl.text.trim();
+              final libelle = libelleCtrl.text.trim();
               final reference =
-                  _refCtrl.text.trim().isEmpty ? null : _refCtrl.text.trim();
+                  refCtrl.text.trim().isEmpty ? null : refCtrl.text.trim();
               if (libelle.isEmpty) return; // pas d'insertion si vide
               // Crée la pièce (pièce minimale sans lignes)
               await db.createPieceWithLines(

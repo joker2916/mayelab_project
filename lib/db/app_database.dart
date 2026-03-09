@@ -74,12 +74,13 @@ class Ecritures extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+// ✅ APRÈS
 class LigneEcritures extends Table {
   TextColumn get id => text().clientDefault(() => _uuid.v4())();
   TextColumn get ecritureId =>
       text().customConstraint('REFERENCES ecritures(id)')();
-  TextColumn get compteId =>
-      text().customConstraint('REFERENCES comptes(id)')();
+  IntColumn get compteId =>
+      integer().customConstraint('REFERENCES comptes(id)')(); // ✅ INTEGER
   IntColumn get debit => integer().withDefault(const Constant(0))();
   IntColumn get credit => integer().withDefault(const Constant(0))();
   TextColumn get description => text().nullable()();
@@ -276,6 +277,64 @@ class AppDatabase extends _$AppDatabase {
       await (delete(ecritures)..where((t) => t.id.equals(id))).go();
     }
   }
+
+  /// Met à jour une écriture (pièce) et remplace toutes ses lignes (transaction).
+  Future<void> updatePieceWithLines({
+    required String ecritureId,
+    required String libelle,
+    String? reference,
+    DateTime? date,
+    List<LigneEcrituresCompanion>? lines,
+  }) async {
+    await transaction(() async {
+      final now = DateTime.now();
+      // Met à jour l'ecriture
+      await (update(ecritures)..where((t) => t.id.equals(ecritureId))).write(
+        EcrituresCompanion(
+          libelle: Value(libelle),
+          reference: Value(reference),
+          date: Value(date ?? now),
+          updatedAt: Value(now),
+        ),
+      );
+
+      // Supprime les lignes existantes liées à cette écriture
+      await (delete(ligneEcritures)
+            ..where((t) => t.ecritureId.equals(ecritureId)))
+          .go();
+
+      // Réinsère les lignes fournies (si présentes)
+      if (lines != null && lines.isNotEmpty) {
+        for (final l in lines) {
+          await into(ligneEcritures).insert(
+            l.copyWith(
+              id: Value(_uuid.v4()),
+              ecritureId: Value(ecritureId),
+            ),
+          );
+        }
+      }
+    });
+  }
+
+  /// Charge une écriture avec ses lignes (utile pour l'UI d'édition)
+  Future<EcritureWithLines?> fetchPieceWithLines(String ecritureId) async {
+    final ecrit = await (select(ecritures)
+          ..where((t) => t.id.equals(ecritureId)))
+        .getSingleOrNull();
+    if (ecrit == null) return null;
+    final lignes = await (select(ligneEcritures)
+          ..where((t) => t.ecritureId.equals(ecritureId)))
+        .get();
+    return EcritureWithLines(ecrit, lignes);
+  }
+}
+
+/// Wrapper simple pour retourner l'entité + ses lignes
+class EcritureWithLines {
+  final Ecriture ecriture;
+  final List<LigneEcriture> lignes;
+  EcritureWithLines(this.ecriture, this.lignes);
 }
 
 // ---------------------------

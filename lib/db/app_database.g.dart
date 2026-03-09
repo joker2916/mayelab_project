@@ -1760,9 +1760,9 @@ class $LigneEcrituresTable extends LigneEcritures
   static const VerificationMeta _compteIdMeta =
       const VerificationMeta('compteId');
   @override
-  late final GeneratedColumn<String> compteId = GeneratedColumn<String>(
+  late final GeneratedColumn<int> compteId = GeneratedColumn<int>(
       'compte_id', aliasedName, false,
-      type: DriftSqlType.string,
+      type: DriftSqlType.int,
       requiredDuringInsert: true,
       $customConstraints: 'REFERENCES comptes(id)');
   static const VerificationMeta _debitMeta = const VerificationMeta('debit');
@@ -1843,7 +1843,7 @@ class $LigneEcrituresTable extends LigneEcritures
       ecritureId: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}ecriture_id'])!,
       compteId: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}compte_id'])!,
+          .read(DriftSqlType.int, data['${effectivePrefix}compte_id'])!,
       debit: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}debit'])!,
       credit: attachedDatabase.typeMapping
@@ -1862,7 +1862,7 @@ class $LigneEcrituresTable extends LigneEcritures
 class LigneEcriture extends DataClass implements Insertable<LigneEcriture> {
   final String id;
   final String ecritureId;
-  final String compteId;
+  final int compteId;
   final int debit;
   final int credit;
   final String? description;
@@ -1878,7 +1878,7 @@ class LigneEcriture extends DataClass implements Insertable<LigneEcriture> {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
     map['ecriture_id'] = Variable<String>(ecritureId);
-    map['compte_id'] = Variable<String>(compteId);
+    map['compte_id'] = Variable<int>(compteId);
     map['debit'] = Variable<int>(debit);
     map['credit'] = Variable<int>(credit);
     if (!nullToAbsent || description != null) {
@@ -1906,7 +1906,7 @@ class LigneEcriture extends DataClass implements Insertable<LigneEcriture> {
     return LigneEcriture(
       id: serializer.fromJson<String>(json['id']),
       ecritureId: serializer.fromJson<String>(json['ecritureId']),
-      compteId: serializer.fromJson<String>(json['compteId']),
+      compteId: serializer.fromJson<int>(json['compteId']),
       debit: serializer.fromJson<int>(json['debit']),
       credit: serializer.fromJson<int>(json['credit']),
       description: serializer.fromJson<String?>(json['description']),
@@ -1918,7 +1918,7 @@ class LigneEcriture extends DataClass implements Insertable<LigneEcriture> {
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
       'ecritureId': serializer.toJson<String>(ecritureId),
-      'compteId': serializer.toJson<String>(compteId),
+      'compteId': serializer.toJson<int>(compteId),
       'debit': serializer.toJson<int>(debit),
       'credit': serializer.toJson<int>(credit),
       'description': serializer.toJson<String?>(description),
@@ -1928,7 +1928,7 @@ class LigneEcriture extends DataClass implements Insertable<LigneEcriture> {
   LigneEcriture copyWith(
           {String? id,
           String? ecritureId,
-          String? compteId,
+          int? compteId,
           int? debit,
           int? credit,
           Value<String?> description = const Value.absent()}) =>
@@ -1984,7 +1984,7 @@ class LigneEcriture extends DataClass implements Insertable<LigneEcriture> {
 class LigneEcrituresCompanion extends UpdateCompanion<LigneEcriture> {
   final Value<String> id;
   final Value<String> ecritureId;
-  final Value<String> compteId;
+  final Value<int> compteId;
   final Value<int> debit;
   final Value<int> credit;
   final Value<String?> description;
@@ -2001,7 +2001,7 @@ class LigneEcrituresCompanion extends UpdateCompanion<LigneEcriture> {
   LigneEcrituresCompanion.insert({
     this.id = const Value.absent(),
     required String ecritureId,
-    required String compteId,
+    required int compteId,
     this.debit = const Value.absent(),
     this.credit = const Value.absent(),
     this.description = const Value.absent(),
@@ -2011,7 +2011,7 @@ class LigneEcrituresCompanion extends UpdateCompanion<LigneEcriture> {
   static Insertable<LigneEcriture> custom({
     Expression<String>? id,
     Expression<String>? ecritureId,
-    Expression<String>? compteId,
+    Expression<int>? compteId,
     Expression<int>? debit,
     Expression<int>? credit,
     Expression<String>? description,
@@ -2031,7 +2031,7 @@ class LigneEcrituresCompanion extends UpdateCompanion<LigneEcriture> {
   LigneEcrituresCompanion copyWith(
       {Value<String>? id,
       Value<String>? ecritureId,
-      Value<String>? compteId,
+      Value<int>? compteId,
       Value<int>? debit,
       Value<int>? credit,
       Value<String?>? description,
@@ -2057,7 +2057,7 @@ class LigneEcrituresCompanion extends UpdateCompanion<LigneEcriture> {
       map['ecriture_id'] = Variable<String>(ecritureId.value);
     }
     if (compteId.present) {
-      map['compte_id'] = Variable<String>(compteId.value);
+      map['compte_id'] = Variable<int>(compteId.value);
     }
     if (debit.present) {
       map['debit'] = Variable<int>(debit.value);
@@ -3479,6 +3479,26 @@ typedef $$ComptesTableUpdateCompanionBuilder = ComptesCompanion Function({
   Value<int> rgt,
 });
 
+final class $$ComptesTableReferences
+    extends BaseReferences<_$AppDatabase, $ComptesTable, Compte> {
+  $$ComptesTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$LigneEcrituresTable, List<LigneEcriture>>
+      _ligneEcrituresRefsTable(_$AppDatabase db) =>
+          MultiTypedResultKey.fromTable(db.ligneEcritures,
+              aliasName: $_aliasNameGenerator(
+                  db.comptes.id, db.ligneEcritures.compteId));
+
+  $$LigneEcrituresTableProcessedTableManager get ligneEcrituresRefs {
+    final manager = $$LigneEcrituresTableTableManager($_db, $_db.ligneEcritures)
+        .filter((f) => f.compteId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_ligneEcrituresRefsTable($_db));
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: cache));
+  }
+}
+
 class $$ComptesTableFilterComposer
     extends Composer<_$AppDatabase, $ComptesTable> {
   $$ComptesTableFilterComposer({
@@ -3502,6 +3522,27 @@ class $$ComptesTableFilterComposer
 
   ColumnFilters<int> get rgt => $composableBuilder(
       column: $table.rgt, builder: (column) => ColumnFilters(column));
+
+  Expression<bool> ligneEcrituresRefs(
+      Expression<bool> Function($$LigneEcrituresTableFilterComposer f) f) {
+    final $$LigneEcrituresTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $db.ligneEcritures,
+        getReferencedColumn: (t) => t.compteId,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$LigneEcrituresTableFilterComposer(
+              $db: $db,
+              $table: $db.ligneEcritures,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
 }
 
 class $$ComptesTableOrderingComposer
@@ -3552,6 +3593,27 @@ class $$ComptesTableAnnotationComposer
 
   GeneratedColumn<int> get rgt =>
       $composableBuilder(column: $table.rgt, builder: (column) => column);
+
+  Expression<T> ligneEcrituresRefs<T extends Object>(
+      Expression<T> Function($$LigneEcrituresTableAnnotationComposer a) f) {
+    final $$LigneEcrituresTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $db.ligneEcritures,
+        getReferencedColumn: (t) => t.compteId,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$LigneEcrituresTableAnnotationComposer(
+              $db: $db,
+              $table: $db.ligneEcritures,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
 }
 
 class $$ComptesTableTableManager extends RootTableManager<
@@ -3563,9 +3625,9 @@ class $$ComptesTableTableManager extends RootTableManager<
     $$ComptesTableAnnotationComposer,
     $$ComptesTableCreateCompanionBuilder,
     $$ComptesTableUpdateCompanionBuilder,
-    (Compte, BaseReferences<_$AppDatabase, $ComptesTable, Compte>),
+    (Compte, $$ComptesTableReferences),
     Compte,
-    PrefetchHooks Function()> {
+    PrefetchHooks Function({bool ligneEcrituresRefs})> {
   $$ComptesTableTableManager(_$AppDatabase db, $ComptesTable table)
       : super(TableManagerState(
           db: db,
@@ -3605,9 +3667,35 @@ class $$ComptesTableTableManager extends RootTableManager<
             rgt: rgt,
           ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map((e) =>
+                  (e.readTable(table), $$ComptesTableReferences(db, table, e)))
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback: ({ligneEcrituresRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [
+                if (ligneEcrituresRefs) db.ligneEcritures
+              ],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (ligneEcrituresRefs)
+                    await $_getPrefetchedData<Compte, $ComptesTable,
+                            LigneEcriture>(
+                        currentTable: table,
+                        referencedTable: $$ComptesTableReferences
+                            ._ligneEcrituresRefsTable(db),
+                        managerFromTypedResult: (p0) =>
+                            $$ComptesTableReferences(db, table, p0)
+                                .ligneEcrituresRefs,
+                        referencedItemsForCurrentItem: (item,
+                                referencedItems) =>
+                            referencedItems.where((e) => e.compteId == item.id),
+                        typedResults: items)
+                ];
+              },
+            );
+          },
         ));
 }
 
@@ -3620,9 +3708,9 @@ typedef $$ComptesTableProcessedTableManager = ProcessedTableManager<
     $$ComptesTableAnnotationComposer,
     $$ComptesTableCreateCompanionBuilder,
     $$ComptesTableUpdateCompanionBuilder,
-    (Compte, BaseReferences<_$AppDatabase, $ComptesTable, Compte>),
+    (Compte, $$ComptesTableReferences),
     Compte,
-    PrefetchHooks Function()>;
+    PrefetchHooks Function({bool ligneEcrituresRefs})>;
 typedef $$EcrituresTableCreateCompanionBuilder = EcrituresCompanion Function({
   Value<String> id,
   required String companyId,
@@ -4014,7 +4102,7 @@ typedef $$LigneEcrituresTableCreateCompanionBuilder = LigneEcrituresCompanion
     Function({
   Value<String> id,
   required String ecritureId,
-  required String compteId,
+  required int compteId,
   Value<int> debit,
   Value<int> credit,
   Value<String?> description,
@@ -4024,7 +4112,7 @@ typedef $$LigneEcrituresTableUpdateCompanionBuilder = LigneEcrituresCompanion
     Function({
   Value<String> id,
   Value<String> ecritureId,
-  Value<String> compteId,
+  Value<int> compteId,
   Value<int> debit,
   Value<int> credit,
   Value<String?> description,
@@ -4046,6 +4134,21 @@ final class $$LigneEcrituresTableReferences
     final manager = $$EcrituresTableTableManager($_db, $_db.ecritures)
         .filter((f) => f.id.sqlEquals($_column));
     final item = $_typedResult.readTableOrNull(_ecritureIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: [item]));
+  }
+
+  static $ComptesTable _compteIdTable(_$AppDatabase db) =>
+      db.comptes.createAlias(
+          $_aliasNameGenerator(db.ligneEcritures.compteId, db.comptes.id));
+
+  $$ComptesTableProcessedTableManager get compteId {
+    final $_column = $_itemColumn<int>('compte_id')!;
+
+    final manager = $$ComptesTableTableManager($_db, $_db.comptes)
+        .filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_compteIdTable($_db));
     if (item == null) return manager;
     return ProcessedTableManager(
         manager.$state.copyWith(prefetchedData: [item]));
@@ -4085,6 +4188,26 @@ class $$LigneEcrituresTableFilterComposer
             $$EcrituresTableFilterComposer(
               $db: $db,
               $table: $db.ecritures,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+
+  $$ComptesTableFilterComposer get compteId {
+    final $$ComptesTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.compteId,
+        referencedTable: $db.comptes,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$ComptesTableFilterComposer(
+              $db: $db,
+              $table: $db.comptes,
               $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
               joinBuilder: joinBuilder,
               $removeJoinBuilderFromRootComposer:
@@ -4134,6 +4257,26 @@ class $$LigneEcrituresTableOrderingComposer
             ));
     return composer;
   }
+
+  $$ComptesTableOrderingComposer get compteId {
+    final $$ComptesTableOrderingComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.compteId,
+        referencedTable: $db.comptes,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$ComptesTableOrderingComposer(
+              $db: $db,
+              $table: $db.comptes,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
 }
 
 class $$LigneEcrituresTableAnnotationComposer
@@ -4176,6 +4319,26 @@ class $$LigneEcrituresTableAnnotationComposer
             ));
     return composer;
   }
+
+  $$ComptesTableAnnotationComposer get compteId {
+    final $$ComptesTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.compteId,
+        referencedTable: $db.comptes,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$ComptesTableAnnotationComposer(
+              $db: $db,
+              $table: $db.comptes,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
 }
 
 class $$LigneEcrituresTableTableManager extends RootTableManager<
@@ -4189,7 +4352,7 @@ class $$LigneEcrituresTableTableManager extends RootTableManager<
     $$LigneEcrituresTableUpdateCompanionBuilder,
     (LigneEcriture, $$LigneEcrituresTableReferences),
     LigneEcriture,
-    PrefetchHooks Function({bool ecritureId})> {
+    PrefetchHooks Function({bool ecritureId, bool compteId})> {
   $$LigneEcrituresTableTableManager(
       _$AppDatabase db, $LigneEcrituresTable table)
       : super(TableManagerState(
@@ -4204,7 +4367,7 @@ class $$LigneEcrituresTableTableManager extends RootTableManager<
           updateCompanionCallback: ({
             Value<String> id = const Value.absent(),
             Value<String> ecritureId = const Value.absent(),
-            Value<String> compteId = const Value.absent(),
+            Value<int> compteId = const Value.absent(),
             Value<int> debit = const Value.absent(),
             Value<int> credit = const Value.absent(),
             Value<String?> description = const Value.absent(),
@@ -4222,7 +4385,7 @@ class $$LigneEcrituresTableTableManager extends RootTableManager<
           createCompanionCallback: ({
             Value<String> id = const Value.absent(),
             required String ecritureId,
-            required String compteId,
+            required int compteId,
             Value<int> debit = const Value.absent(),
             Value<int> credit = const Value.absent(),
             Value<String?> description = const Value.absent(),
@@ -4243,7 +4406,7 @@ class $$LigneEcrituresTableTableManager extends RootTableManager<
                     $$LigneEcrituresTableReferences(db, table, e)
                   ))
               .toList(),
-          prefetchHooksCallback: ({ecritureId = false}) {
+          prefetchHooksCallback: ({ecritureId = false, compteId = false}) {
             return PrefetchHooks(
               db: db,
               explicitlyWatchedTables: [],
@@ -4270,6 +4433,16 @@ class $$LigneEcrituresTableTableManager extends RootTableManager<
                         $$LigneEcrituresTableReferences._ecritureIdTable(db).id,
                   ) as T;
                 }
+                if (compteId) {
+                  state = state.withJoin(
+                    currentTable: table,
+                    currentColumn: table.compteId,
+                    referencedTable:
+                        $$LigneEcrituresTableReferences._compteIdTable(db),
+                    referencedColumn:
+                        $$LigneEcrituresTableReferences._compteIdTable(db).id,
+                  ) as T;
+                }
 
                 return state;
               },
@@ -4292,7 +4465,7 @@ typedef $$LigneEcrituresTableProcessedTableManager = ProcessedTableManager<
     $$LigneEcrituresTableUpdateCompanionBuilder,
     (LigneEcriture, $$LigneEcrituresTableReferences),
     LigneEcriture,
-    PrefetchHooks Function({bool ecritureId})>;
+    PrefetchHooks Function({bool ecritureId, bool compteId})>;
 typedef $$AttachmentsTableCreateCompanionBuilder = AttachmentsCompanion
     Function({
   Value<String> id,

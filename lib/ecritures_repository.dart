@@ -50,4 +50,7 @@ class EcrituresRepository {
 
   Future<EcritureWithLines?> fetchWithLines(String id) =>
       db.fetchPieceWithLines(id);
+
+  Future<List<GrandLivreLigne>> getGrandLivre(int compteId) =>
+      db.fetchGrandLivre(compteId);
 }

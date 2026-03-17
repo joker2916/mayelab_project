@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mayelab_project/comptes_pages.dart';
 import 'package:mayelab_project/journal_page.dart';
 import 'package:mayelab_project/ecritures_pages.dart';
-import 'package:mayelab_project/db/app_database.dart';
+import 'package:mayelab_project/screens/balance_screen.dart';
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -14,6 +14,7 @@ class MyApp extends StatelessWidget {
     return ProviderScope(
       child: MaterialApp(
         title: 'Mayelab',
+        debugShowCheckedModeBanner: false,
         theme: ThemeData(primarySwatch: Colors.blue),
         home: const MainShell(),
       ),
@@ -21,28 +22,30 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class MainShell extends StatefulWidget {
+class MainShell extends ConsumerWidget {
+  //  ConsumerWidget
   const MainShell({super.key});
 
   @override
-  State<MainShell> createState() => _MainShellState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    return _MainShellView();
+  }
 }
 
-class _MainShellState extends State<MainShell> {
-  int _currentIndex = 0;
-  late final AppDatabase _db;
-  late final List<Widget> _pages;
-
+class _MainShellView extends StatefulWidget {
   @override
-  void initState() {
-    super.initState();
-    _db = AppDatabase(); // ✅ initialisation unique
-    _pages = [
-      const ComptesPage(),
-      const EcrituresPage(),
-      JournalPage(db: _db), // ✅ on passe la DB
-    ];
-  }
+  State<_MainShellView> createState() => _MainShellState();
+}
+
+class _MainShellState extends State<_MainShellView> {
+  int _currentIndex = 0;
+
+  final List<Widget> _pages = const [
+    ComptesPage(),
+    EcrituresPage(),
+    JournalPage(),
+    BalanceScreen(),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -69,6 +72,11 @@ class _MainShellState extends State<MainShell> {
             icon: Icon(Icons.book_outlined),
             selectedIcon: Icon(Icons.book),
             label: 'Journal',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.balance_outlined),
+            selectedIcon: Icon(Icons.balance),
+            label: 'Balance',
           ),
         ],
       ),

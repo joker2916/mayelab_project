@@ -1,216 +1,317 @@
+// lib/ecritures_pages.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mayelab_project/providers.dart';
+import 'package:mayelab_project/db/app_database.dart';
+import 'package:drift/drift.dart' as drift;
 
-// Modèle temporaire
-class Ecriture {
-  final String id;
-  String libelle;
-  DateTime date;
-  double montant;
-  String compte;
-  String type;
-
-  Ecriture({
-    required this.id,
-    required this.libelle,
-    required this.date,
-    required this.montant,
-    required this.compte,
-    required this.type,
-  });
-}
-
-class EcrituresPage extends StatefulWidget {
+class EcrituresPage extends ConsumerStatefulWidget {
   const EcrituresPage({super.key});
 
   @override
-  State<EcrituresPage> createState() => _EcrituresPageState();
+  ConsumerState<EcrituresPage> createState() => _EcrituresPageState();
 }
 
-class _EcrituresPageState extends State<EcrituresPage> {
-  final List<String> _planComptable = [
-    'Caisse',
-    'Banque',
-    'Dépenses Transport',
-    'Dépenses Alimentation',
-    'Ventes',
-    'Salaires',
-  ];
+class _EcrituresPageState extends ConsumerState<EcrituresPage> {
+  static const String _companyId = 'default-company';
 
-  final List<Ecriture> _ecritures = [];
+  AppDatabase get _db => ref.read(databaseProvider);
 
-  void _supprimerEcriture(Ecriture e) {
-    setState(() => _ecritures.remove(e));
-  }
+  void _ouvrirFormulaire({EcritureWithLines? existing}) async {
+    final comptes = await (_db.select(_db.comptes)
+          ..orderBy([(c) => drift.OrderingTerm(expression: c.code)]))
+        .get();
 
-  void _ouvrirFormulaire({Ecriture? ecriture}) {
+    if (comptes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ajoutez d\'abord des comptes')),
+      );
+      return;
+    }
+
     final formKey = GlobalKey<FormState>();
-    final libelleCtrl = TextEditingController(text: ecriture?.libelle ?? '');
-    final montantCtrl = TextEditingController(
-        text: ecriture != null ? ecriture.montant.toString() : '');
-    DateTime date = ecriture?.date ?? DateTime.now();
-    String compte = ecriture?.compte ?? _planComptable.first;
-    String type = ecriture?.type ?? 'DEBIT';
+    final libelleCtrl =
+        TextEditingController(text: existing?.ecriture.libelle ?? '');
+    final referenceCtrl =
+        TextEditingController(text: existing?.ecriture.reference ?? '');
+    DateTime date = existing?.ecriture.date ?? DateTime.now();
+    String selectedCurrency = 'USD';
 
-    showModalBottomSheet(
+    List<Map<String, dynamic>> lignes = existing != null
+        ? existing.lignes
+            .map((l) => {
+                  'compteId': l.compteId,
+                  'debit': l.debit,
+                  'credit': l.credit,
+                  'description': l.description ?? '',
+                })
+            .toList()
+        : [
+            {
+              'compteId': comptes.first.id,
+              'debit': 0,
+              'credit': 0,
+              'description': '',
+            }
+          ];
+
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
+      builder: (ctx) {
         return StatefulBuilder(
-          builder: (context, setModalState) {
+          builder: (ctx, setModalState) {
             return Padding(
               padding: EdgeInsets.only(
                 left: 16,
                 right: 16,
-                top: 24,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+                top: 16,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
               ),
               child: Form(
                 key: formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      ecriture == null
-                          ? 'Nouvelle écriture'
-                          : 'Modifier écriture',
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Libellé
-                    TextFormField(
-                      controller: libelleCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Libellé',
-                        border: OutlineInputBorder(),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        existing == null
+                            ? 'Nouvelle écriture'
+                            : 'Modifier écriture',
+                        style: const TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
                       ),
-                      validator: (v) =>
-                          v == null || v.isEmpty ? 'Champ requis' : null,
-                    ),
-                    const SizedBox(height: 12),
+                      const SizedBox(height: 12),
 
-                    // Date
-                    InkWell(
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: date,
-                          firstDate: DateTime(2000),
-                          lastDate: DateTime(2100),
-                        );
-                        if (picked != null) {
-                          setModalState(() => date = picked);
-                        }
-                      },
-                      child: InputDecorator(
-                        decoration: const InputDecoration(
-                          labelText: 'Date',
-                          border: OutlineInputBorder(),
-                          suffixIcon: Icon(Icons.calendar_today),
-                        ),
-                        child: Text(
-                          '${date.day.toString().padLeft(2, '0')}/'
-                          '${date.month.toString().padLeft(2, '0')}/'
-                          '${date.year}',
-                        ),
+                      // Libellé
+                      TextFormField(
+                        controller: libelleCtrl,
+                        decoration:
+                            const InputDecoration(labelText: 'Libellé *'),
+                        validator: (v) =>
+                            (v == null || v.isEmpty) ? 'Requis' : null,
                       ),
-                    ),
-                    const SizedBox(height: 12),
+                      const SizedBox(height: 8),
 
-                    // Montant
-                    TextFormField(
-                      controller: montantCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Montant',
-                        border: OutlineInputBorder(),
-                        suffixText: 'FC',
+                      // Référence
+                      TextFormField(
+                        controller: referenceCtrl,
+                        decoration:
+                            const InputDecoration(labelText: 'Référence'),
                       ),
-                      validator: (v) {
-                        if (v == null || v.isEmpty) return 'Champ requis';
-                        if (double.tryParse(v) == null)
-                          return 'Nombre invalide';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 12),
+                      const SizedBox(height: 8),
 
-                    // Compte (plan comptable)
-                    DropdownButtonFormField<String>(
-                      value: compte,
-                      decoration: const InputDecoration(
-                        labelText: 'Compte',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: _planComptable
-                          .map(
-                              (c) => DropdownMenuItem(value: c, child: Text(c)))
-                          .toList(),
-                      onChanged: (v) => setModalState(() => compte = v!),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Débit / Crédit
-                    Row(
-                      children: [
-                        const Text('Type : ',
-                            style: TextStyle(fontWeight: FontWeight.bold)),
-                        const SizedBox(width: 12),
-                        ChoiceChip(
-                          label: const Text('DÉBIT'),
-                          selected: type == 'DEBIT',
-                          selectedColor: Colors.red.shade100,
-                          onSelected: (_) =>
-                              setModalState(() => type = 'DEBIT'),
-                        ),
-                        const SizedBox(width: 8),
-                        ChoiceChip(
-                          label: const Text('CRÉDIT'),
-                          selected: type == 'CREDIT',
-                          selectedColor: Colors.green.shade100,
-                          onSelected: (_) =>
-                              setModalState(() => type = 'CREDIT'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Bouton valider
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          if (formKey.currentState!.validate()) {
-                            final nouvelleEcriture = Ecriture(
-                              id: ecriture?.id ??
-                                  DateTime.now()
-                                      .millisecondsSinceEpoch
-                                      .toString(),
-                              libelle: libelleCtrl.text,
-                              date: date,
-                              montant: double.parse(montantCtrl.text),
-                              compte: compte,
-                              type: type,
-                            );
-                            setState(() {
-                              if (ecriture == null) {
-                                _ecritures.add(nouvelleEcriture);
-                              } else {
-                                final index = _ecritures.indexOf(ecriture);
-                                _ecritures[index] = nouvelleEcriture;
+                      // Devise
+                      Row(
+                        children: [
+                          const Text('Devise : ',
+                              style: TextStyle(fontWeight: FontWeight.w500)),
+                          const SizedBox(width: 12),
+                          DropdownButton<String>(
+                            value: selectedCurrency,
+                            items: const [
+                              DropdownMenuItem(
+                                  value: 'USD', child: Text('🇺🇸 USD')),
+                              DropdownMenuItem(
+                                  value: 'CDF', child: Text('🇨🇩 CDF')),
+                            ],
+                            onChanged: (v) {
+                              if (v != null) {
+                                setModalState(() => selectedCurrency = v);
                               }
-                            });
-                            Navigator.pop(context);
-                          }
-                        },
-                        child: const Text('Valider'),
+                            },
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+
+                      // Date
+                      Row(
+                        children: [
+                          const Text('Date : '),
+                          TextButton(
+                            onPressed: () async {
+                              final picked = await showDatePicker(
+                                context: ctx,
+                                initialDate: date,
+                                firstDate: DateTime(2000),
+                                lastDate: DateTime(2100),
+                              );
+                              if (picked != null) {
+                                setModalState(() => date = picked);
+                              }
+                            },
+                            child: Text(
+                              '${date.day.toString().padLeft(2, '0')}/'
+                              '${date.month.toString().padLeft(2, '0')}/'
+                              '${date.year}',
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Divider(),
+
+                      // Lignes
+                      const Text('Lignes',
+                          style: TextStyle(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+
+                      ...lignes.asMap().entries.map((entry) {
+                        final i = entry.key;
+                        final ligne = entry.value;
+                        final debitCtrl = TextEditingController(
+                            text: ligne['debit'].toString());
+                        final creditCtrl = TextEditingController(
+                            text: ligne['credit'].toString());
+                        final descCtrl =
+                            TextEditingController(text: ligne['description']);
+
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Column(
+                              children: [
+                                // Sélecteur de compte
+                                DropdownButtonFormField<int>(
+                                  value: ligne['compteId'] as int,
+                                  decoration: const InputDecoration(
+                                      labelText: 'Compte'),
+                                  items: comptes
+                                      .map((c) => DropdownMenuItem(
+                                            value: c.id,
+                                            child: Text('${c.code} - ${c.nom}'),
+                                          ))
+                                      .toList(),
+                                  onChanged: (v) {
+                                    if (v != null) {
+                                      setModalState(
+                                          () => lignes[i]['compteId'] = v);
+                                    }
+                                  },
+                                ),
+                                Row(
+                                  children: [
+                                    // Débit
+                                    Expanded(
+                                      child: TextFormField(
+                                        controller: debitCtrl,
+                                        keyboardType: TextInputType.number,
+                                        decoration: const InputDecoration(
+                                            labelText: 'Débit'),
+                                        onChanged: (v) => lignes[i]['debit'] =
+                                            int.tryParse(v) ?? 0,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    // Crédit
+                                    Expanded(
+                                      child: TextFormField(
+                                        controller: creditCtrl,
+                                        keyboardType: TextInputType.number,
+                                        decoration: const InputDecoration(
+                                            labelText: 'Crédit'),
+                                        onChanged: (v) => lignes[i]['credit'] =
+                                            int.tryParse(v) ?? 0,
+                                      ),
+                                    ),
+                                    // Supprimer ligne
+                                    if (lignes.length > 1)
+                                      IconButton(
+                                        icon: const Icon(Icons.remove_circle,
+                                            color: Colors.red),
+                                        onPressed: () => setModalState(
+                                            () => lignes.removeAt(i)),
+                                      ),
+                                  ],
+                                ),
+                                // Description
+                                TextFormField(
+                                  controller: descCtrl,
+                                  decoration: const InputDecoration(
+                                      labelText: 'Description'),
+                                  onChanged: (v) =>
+                                      lignes[i]['description'] = v,
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+
+                      // Ajouter ligne
+                      TextButton.icon(
+                        onPressed: () => setModalState(() => lignes.add({
+                              'compteId': comptes.first.id,
+                              'debit': 0,
+                              'credit': 0,
+                              'description': '',
+                            })),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Ajouter une ligne'),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Bouton valider
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            if (!formKey.currentState!.validate()) return;
+
+                            final lignesCompanion = lignes
+                                .map((l) => LigneEcrituresCompanion(
+                                      compteId:
+                                          drift.Value(l['compteId'] as int),
+                                      debit: drift.Value(l['debit'] as int),
+                                      credit: drift.Value(l['credit'] as int),
+                                      description: drift.Value(
+                                          l['description'] as String),
+                                    ))
+                                .toList();
+
+                            try {
+                              if (existing == null) {
+                                await _db.createPieceWithLines(
+                                  companyId: _companyId,
+                                  libelle: libelleCtrl.text.trim(),
+                                  reference: referenceCtrl.text.trim().isEmpty
+                                      ? null
+                                      : referenceCtrl.text.trim(),
+                                  date: date,
+                                  lines: lignesCompanion,
+                                );
+                              } else {
+                                await _db.updatePieceWithLines(
+                                  ecritureId: existing.ecriture.id,
+                                  libelle: libelleCtrl.text.trim(),
+                                  reference: referenceCtrl.text.trim().isEmpty
+                                      ? null
+                                      : referenceCtrl.text.trim(),
+                                  date: date,
+                                  lines: lignesCompanion,
+                                );
+                              }
+                              if (ctx.mounted) Navigator.pop(ctx);
+                            } catch (e) {
+                              if (ctx.mounted) {
+                                ScaffoldMessenger.of(ctx).showSnackBar(
+                                  SnackBar(
+                                    content: Text(e
+                                        .toString()
+                                        .replaceAll('Exception: ', '')),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                          child: Text(existing == null ? 'Créer' : 'Modifier'),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );
@@ -220,59 +321,85 @@ class _EcrituresPageState extends State<EcrituresPage> {
     );
   }
 
+  void _supprimer(Ecriture e) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Supprimer ?'),
+        content: Text('Supprimer "${e.libelle}" ?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Annuler')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child:
+                  const Text('Supprimer', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await _db.deletePieceById(e.id);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Écritures')),
-      body: _ecritures.isEmpty
-          ? const Center(child: Text('Aucune écriture pour le moment'))
-          : ListView.builder(
-              itemCount: _ecritures.length,
-              itemBuilder: (context, index) {
-                final e = _ecritures[index];
-                return ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor:
-                        e.type == 'DEBIT' ? Colors.red : Colors.green,
-                    child: Text(
-                      e.type == 'DEBIT' ? 'D' : 'C',
-                      style: const TextStyle(color: Colors.white),
+      appBar: AppBar(
+        title: const Text('Écritures'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: () => _ouvrirFormulaire(),
+          ),
+        ],
+      ),
+      body: StreamBuilder<List<Ecriture>>(
+        stream: _db.watchAllPieces(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final ecritures = snapshot.data ?? [];
+          if (ecritures.isEmpty) {
+            return const Center(child: Text('Aucune écriture'));
+          }
+          return ListView.builder(
+            itemCount: ecritures.length,
+            itemBuilder: (context, i) {
+              final e = ecritures[i];
+              return ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.blue.shade100,
+                  child: const Icon(Icons.receipt_long, color: Colors.blue),
+                ),
+                title: Text(e.libelle),
+                subtitle: Text(
+                  '${e.reference ?? ''} • '
+                  '${e.date != null ? '${e.date!.day.toString().padLeft(2, '0')}/${e.date!.month.toString().padLeft(2, '0')}/${e.date!.year}' : ''}',
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit, size: 20),
+                      onPressed: () async {
+                        final ewl = await _db.fetchPieceWithLines(e.id);
+                        if (ewl != null) _ouvrirFormulaire(existing: ewl);
+                      },
                     ),
-                  ),
-                  title: Text(e.libelle),
-                  subtitle: Text(
-                    '${e.compte} • '
-                    '${e.date.day.toString().padLeft(2, '0')}/'
-                    '${e.date.month.toString().padLeft(2, '0')}/'
-                    '${e.date.year}',
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '${e.montant.toStringAsFixed(2)} FC',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: e.type == 'DEBIT' ? Colors.red : Colors.green,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.edit, size: 20),
-                        onPressed: () => _ouvrirFormulaire(ecriture: e),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete,
-                            size: 20, color: Colors.red),
-                        onPressed: () => _supprimerEcriture(e),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _ouvrirFormulaire(),
-        child: const Icon(Icons.add),
+                    IconButton(
+                      icon: const Icon(Icons.delete,
+                          size: 20, color: Colors.redAccent),
+                      onPressed: () => _supprimer(e),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
       ),
     );
   }

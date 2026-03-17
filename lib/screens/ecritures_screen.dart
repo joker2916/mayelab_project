@@ -7,14 +7,13 @@ class EcrituresScreen extends StatefulWidget {
   State<EcrituresScreen> createState() => _EcrituresScreenState();
 }
 
-// Modèle temporaire
 class Ecriture {
   final String id;
   String libelle;
   DateTime date;
   double montant;
   String compte;
-  String type; // DEBIT ou CREDIT
+  String type;
 
   Ecriture({
     required this.id,
@@ -27,7 +26,6 @@ class Ecriture {
 }
 
 class _EcrituresScreenState extends State<EcrituresScreen> {
-  // Données fictives plan comptable
   final List<String> _planComptable = [
     'Caisse',
     'Banque',
@@ -40,13 +38,13 @@ class _EcrituresScreenState extends State<EcrituresScreen> {
   final List<Ecriture> _ecritures = [];
 
   void _ouvrirFormulaire({Ecriture? ecriture}) {
-    final _formKey = GlobalKey<FormState>();
-    final _libelle = TextEditingController(text: ecriture?.libelle ?? '');
-    final _montant = TextEditingController(
+    final formKey = GlobalKey<FormState>();
+    final libelleCtrl = TextEditingController(text: ecriture?.libelle ?? '');
+    final montantCtrl = TextEditingController(
         text: ecriture != null ? ecriture.montant.toString() : '');
-    DateTime _date = ecriture?.date ?? DateTime.now();
-    String _compte = ecriture?.compte ?? _planComptable.first;
-    String _type = ecriture?.type ?? 'DEBIT';
+    DateTime date = ecriture?.date ?? DateTime.now();
+    String compte = ecriture?.compte ?? _planComptable.first;
+    String type = ecriture?.type ?? 'DEBIT';
 
     showModalBottomSheet(
       context: context,
@@ -65,7 +63,7 @@ class _EcrituresScreenState extends State<EcrituresScreen> {
                 bottom: MediaQuery.of(context).viewInsets.bottom + 24,
               ),
               child: Form(
-                key: _formKey,
+                key: formKey,
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -79,10 +77,8 @@ class _EcrituresScreenState extends State<EcrituresScreen> {
                             fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 16),
-
-                      // Libellé
                       TextFormField(
-                        controller: _libelle,
+                        controller: libelleCtrl,
                         decoration: const InputDecoration(
                           labelText: 'Libellé',
                           border: OutlineInputBorder(),
@@ -91,18 +87,16 @@ class _EcrituresScreenState extends State<EcrituresScreen> {
                             v == null || v.isEmpty ? 'Champ requis' : null,
                       ),
                       const SizedBox(height: 12),
-
-                      // Date
                       InkWell(
                         onTap: () async {
                           final picked = await showDatePicker(
                             context: context,
-                            initialDate: _date,
+                            initialDate: date,
                             firstDate: DateTime(2000),
                             lastDate: DateTime(2100),
                           );
                           if (picked != null) {
-                            setModalState(() => _date = picked);
+                            setModalState(() => date = picked);
                           }
                         },
                         child: InputDecorator(
@@ -112,17 +106,15 @@ class _EcrituresScreenState extends State<EcrituresScreen> {
                             suffixIcon: Icon(Icons.calendar_today),
                           ),
                           child: Text(
-                            '${_date.day.toString().padLeft(2, '0')}/'
-                            '${_date.month.toString().padLeft(2, '0')}/'
-                            '${_date.year}',
+                            '${date.day.toString().padLeft(2, '0')}/'
+                            '${date.month.toString().padLeft(2, '0')}/'
+                            '${date.year}',
                           ),
                         ),
                       ),
                       const SizedBox(height: 12),
-
-                      // Montant
                       TextFormField(
-                        controller: _montant,
+                        controller: montantCtrl,
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(
                           labelText: 'Montant',
@@ -130,16 +122,15 @@ class _EcrituresScreenState extends State<EcrituresScreen> {
                         ),
                         validator: (v) {
                           if (v == null || v.isEmpty) return 'Champ requis';
-                          if (double.tryParse(v) == null)
+                          if (double.tryParse(v) == null) {
                             return 'Montant invalide';
+                          }
                           return null;
                         },
                       ),
                       const SizedBox(height: 12),
-
-                      // Compte (plan comptable)
                       DropdownButtonFormField<String>(
-                        value: _compte,
+                        value: compte,
                         decoration: const InputDecoration(
                           labelText: 'Compte',
                           border: OutlineInputBorder(),
@@ -149,11 +140,9 @@ class _EcrituresScreenState extends State<EcrituresScreen> {
                                 DropdownMenuItem(value: c, child: Text(c)))
                             .toList(),
                         onChanged: (v) =>
-                            setModalState(() => _compte = v ?? _compte),
+                            setModalState(() => compte = v ?? compte),
                       ),
                       const SizedBox(height: 12),
-
-                      // Débit / Crédit
                       const Text('Type',
                           style: TextStyle(fontWeight: FontWeight.w500)),
                       const SizedBox(height: 6),
@@ -163,49 +152,47 @@ class _EcrituresScreenState extends State<EcrituresScreen> {
                             child: RadioListTile<String>(
                               title: const Text('Débit'),
                               value: 'DEBIT',
-                              groupValue: _type,
+                              groupValue: type,
                               onChanged: (v) =>
-                                  setModalState(() => _type = v ?? _type),
+                                  setModalState(() => type = v ?? type),
                             ),
                           ),
                           Expanded(
                             child: RadioListTile<String>(
                               title: const Text('Crédit'),
                               value: 'CREDIT',
-                              groupValue: _type,
+                              groupValue: type,
                               onChanged: (v) =>
-                                  setModalState(() => _type = v ?? _type),
+                                  setModalState(() => type = v ?? type),
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 16),
-
-                      // Bouton valider
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
                           onPressed: () {
-                            if (_formKey.currentState!.validate()) {
+                            if (formKey.currentState!.validate()) {
                               setState(() {
                                 if (ecriture == null) {
                                   _ecritures.add(Ecriture(
                                     id: DateTime.now()
                                         .millisecondsSinceEpoch
                                         .toString(),
-                                    libelle: _libelle.text,
-                                    date: _date,
-                                    montant: double.parse(_montant.text),
-                                    compte: _compte,
-                                    type: _type,
+                                    libelle: libelleCtrl.text,
+                                    date: date,
+                                    montant: double.parse(montantCtrl.text),
+                                    compte: compte,
+                                    type: type,
                                   ));
                                 } else {
-                                  ecriture.libelle = _libelle.text;
-                                  ecriture.date = _date;
+                                  ecriture.libelle = libelleCtrl.text;
+                                  ecriture.date = date;
                                   ecriture.montant =
-                                      double.parse(_montant.text);
-                                  ecriture.compte = _compte;
-                                  ecriture.type = _type;
+                                      double.parse(montantCtrl.text);
+                                  ecriture.compte = compte;
+                                  ecriture.type = type;
                                 }
                               });
                               Navigator.pop(context);
@@ -298,7 +285,7 @@ class _EcrituresScreenState extends State<EcrituresScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        '${e.montant.toStringAsFixed(2)}',
+                        e.montant.toStringAsFixed(2),
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: e.type == 'DEBIT' ? Colors.red : Colors.green,

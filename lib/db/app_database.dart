@@ -5,12 +5,13 @@ import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
+import 'daos/taux_change_dao.dart';
 
 part 'app_database.g.dart';
 
 final _uuid = Uuid();
 
-const int RATE_SCALE = 1000000; // six décimales
+const int RATE_SCALE = 1000000;
 
 // ---------------------------
 // TABLES
@@ -20,8 +21,9 @@ class Companies extends Table {
   TextColumn get id => text().clientDefault(() => _uuid.v4())();
   TextColumn get name => text().withLength(min: 1, max: 200)();
   TextColumn get taxNumber => text().nullable()();
-  TextColumn get currencyDefault =>
-      text().nullable().customConstraint('REFERENCES currencies(id)')();
+  TextColumn get currencyDefault => text()
+      .nullable()
+      .customConstraint('NULLABLE REFERENCES currencies(id)')();
   BoolColumn get active => boolean().withDefault(const Constant(true))();
   DateTimeColumn get createdAt =>
       dateTime().clientDefault(() => DateTime.now())();
@@ -34,6 +36,20 @@ class Currencies extends Table {
   TextColumn get id => text().clientDefault(() => _uuid.v4())();
   TextColumn get code => text().withLength(min: 1, max: 10)();
   TextColumn get name => text().nullable()();
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+class ExchangeRates extends Table {
+  TextColumn get id => text().clientDefault(() => _uuid.v4())();
+  TextColumn get fromCurrency =>
+      text().customConstraint('REFERENCES currencies(id)')();
+  TextColumn get toCurrency =>
+      text().customConstraint('REFERENCES currencies(id)')();
+  IntColumn get rate => integer()();
+  DateTimeColumn get date => dateTime()();
+  DateTimeColumn get createdAt =>
+      dateTime().clientDefault(() => DateTime.now())();
   @override
   Set<Column> get primaryKey => {id};
 }
@@ -52,7 +68,6 @@ class Sequences extends Table {
 class Comptes extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get code => text().withLength(min: 1, max: 50)();
-  // On expose 'nom' parce que ton UI utilise c.nom
   TextColumn get nom => text().withLength(min: 1, max: 200)();
   IntColumn get lft => integer()();
   IntColumn get rgt => integer()();
@@ -61,6 +76,9 @@ class Comptes extends Table {
 class Ecritures extends Table {
   TextColumn get id => text().clientDefault(() => _uuid.v4())();
   TextColumn get companyId => text()();
+  TextColumn get currencyId => text()
+      .nullable()
+      .customConstraint('NULLABLE REFERENCES currencies(id)')();
   TextColumn get libelle => text().withLength(min: 1, max: 500)();
   TextColumn get reference => text().nullable()();
   DateTimeColumn get date => dateTime().nullable()();
@@ -68,19 +86,17 @@ class Ecritures extends Table {
   TextColumn get statut => text().withDefault(const Constant('BROUILLON'))();
   DateTimeColumn get createdAt =>
       dateTime().clientDefault(() => DateTime.now())();
-  // corrigé : appel de méthode nullable()
   DateTimeColumn get updatedAt => dateTime().nullable()();
   @override
   Set<Column> get primaryKey => {id};
 }
 
-// ✅ APRÈS
 class LigneEcritures extends Table {
   TextColumn get id => text().clientDefault(() => _uuid.v4())();
   TextColumn get ecritureId =>
       text().customConstraint('REFERENCES ecritures(id)')();
   IntColumn get compteId =>
-      integer().customConstraint('REFERENCES comptes(id)')(); // ✅ INTEGER
+      integer().customConstraint('REFERENCES comptes(id)')();
   IntColumn get debit => integer().withDefault(const Constant(0))();
   IntColumn get credit => integer().withDefault(const Constant(0))();
   TextColumn get description => text().nullable()();
@@ -110,35 +126,76 @@ class AuditLogs extends Table {
 }
 
 // ---------------------------
-// DATABASE (Drift) + METHODS
+// DATABASE
 // ---------------------------
 
 @DriftDatabase(
   tables: [
     Companies,
     Currencies,
+    ExchangeRates,
     Sequences,
     Comptes,
     Ecritures,
     LigneEcritures,
     Attachments,
     AuditLogs,
+    TauxChange,
   ],
+  daos: [TauxChangeDao],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 3;
 
-  // Sequences: generate reference number
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            await m.createTable(exchangeRates);
+            await m.addColumn(ecritures, ecritures.currencyId);
+          }
+          if (from < 3) {
+            await m.createTable(tauxChange);
+          }
+        },
+        beforeOpen: (details) async {
+          await customStatement('PRAGMA foreign_keys = ON');
+          await _seedCurrencies();
+        },
+      );
+
+  // ---------------------------
+  // SEED
+  // ---------------------------
+
+  Future<void> _seedCurrencies() async {
+    final existing = await select(currencies).get();
+    if (existing.isNotEmpty) return;
+    await into(currencies).insert(CurrenciesCompanion(
+      id: Value('USD'),
+      code: Value('USD'),
+      name: Value('Dollar américain'),
+    ));
+    await into(currencies).insert(CurrenciesCompanion(
+      id: Value('CDF'),
+      code: Value('CDF'),
+      name: Value('Franc Congolais'),
+    ));
+  }
+
+  // ---------------------------
+  // SEQUENCES
+  // ---------------------------
+
   Future<String> nextSequenceReference({
     required String companyId,
     String? journalId,
     String? prefix,
     int padding = 4,
   }) async {
-    // Gère journalId nullable : on construit la requête en conséquence
     final q = select(sequences)..where((s) => s.companyId.equals(companyId));
     if (journalId == null) {
       q.where((s) => s.journalId.isNull());
@@ -157,52 +214,52 @@ class AppDatabase extends _$AppDatabase {
         padding: Value(padding),
       ));
       final number = '1'.padLeft(padding, '0');
-      // corrigé : pas d'espaces indésirables dans l'interpolation
       return '${prefix ?? ''}$number';
     } else {
       final next = existing.lastNumber + 1;
       await (update(sequences)..where((s) => s.id.equals(existing.id))).write(
         SequencesCompanion(lastNumber: Value(next)),
       );
-      final pad = existing.padding;
-      final number = next.toString().padLeft(pad, '0');
+      final number = next.toString().padLeft(existing.padding, '0');
       return '${existing.prefix ?? ''}$number';
     }
   }
 
-  // Alias pour ton UI
+  // ---------------------------
+  // ECRITURES (PIECES)
+  // ---------------------------
+
   Future<String> createPieceWithLines({
     required String companyId,
     required String libelle,
     String? journalId,
     String? reference,
+    String? currencyId,
     DateTime? date,
     List<LigneEcrituresCompanion>? lines,
   }) async {
     return transaction<String>(() async {
-      // Génère un id pour la pièce
       final id = _uuid.v4();
       final now = DateTime.now();
-      // Si reference n'est pas fournie, génère une référence via la sequence (optionnel)
+
       String? finalReference = reference;
       if (finalReference == null) {
         try {
-          // nextSequenceReference gère journalId nullable
           finalReference = await nextSequenceReference(
             companyId: companyId,
             journalId: journalId,
-            prefix: null,
           );
         } catch (_) {
-          // si la génération échoue, on reste avec null
           finalReference = null;
         }
       }
 
-      // Insère l'ecriture (pièce) — attention: Ecritures n'a PAS de colonne journalId
+      if (lines != null && lines.isNotEmpty) _validateEquilibre(lines);
+
       await into(ecritures).insert(EcrituresCompanion(
         id: Value(id),
         companyId: Value(companyId),
+        currencyId: Value(currencyId),
         libelle: Value(libelle),
         reference: Value(finalReference),
         date: Value(date ?? now),
@@ -210,10 +267,8 @@ class AppDatabase extends _$AppDatabase {
         createdAt: Value(now),
       ));
 
-      // Insère les lignes si fournies
       if (lines != null && lines.isNotEmpty) {
         for (final l in lines) {
-          // on s'assure d'assigner un id unique et de lier à l'ecriture créée
           await into(ligneEcritures).insert(
             l.copyWith(
               id: Value(_uuid.v4()),
@@ -225,40 +280,6 @@ class AppDatabase extends _$AppDatabase {
 
       return id;
     });
-  }
-
-  Future<String> addAttachment({
-    required String ecritureId,
-    required String filename,
-    required String path,
-    String? mime,
-    int? size,
-  }) async {
-    final id = _uuid.v4();
-    await into(attachments).insert(
-      AttachmentsCompanion(
-        id: Value(id),
-        ecritureId: Value(ecritureId),
-        filename: Value(filename),
-        path: Value(path),
-        mime: Value(mime),
-        size: Value(size),
-      ),
-    );
-    return id;
-  }
-
-  Future<List<AuditLog>> fetchAuditLogs({
-    String? entity,
-    String? entityId,
-    int limit = 200,
-  }) async {
-    final q = (select(auditLogs)
-      ..orderBy([(t) => OrderingTerm.desc(t.createdAt)])
-      ..limit(limit));
-    if (entity != null) q.where((t) => t.entity.equals(entity));
-    if (entityId != null) q.where((t) => t.entityId.equals(entityId));
-    return q.get();
   }
 
   Stream<List<Ecriture>> watchAllPieces() {
@@ -278,32 +299,33 @@ class AppDatabase extends _$AppDatabase {
     }
   }
 
-  /// Met à jour une écriture (pièce) et remplace toutes ses lignes (transaction).
   Future<void> updatePieceWithLines({
     required String ecritureId,
     required String libelle,
     String? reference,
+    String? currencyId,
     DateTime? date,
     List<LigneEcrituresCompanion>? lines,
   }) async {
     await transaction(() async {
       final now = DateTime.now();
-      // Met à jour l'ecriture
+
+      if (lines != null && lines.isNotEmpty) _validateEquilibre(lines);
+
       await (update(ecritures)..where((t) => t.id.equals(ecritureId))).write(
         EcrituresCompanion(
           libelle: Value(libelle),
           reference: Value(reference),
+          currencyId: Value(currencyId),
           date: Value(date ?? now),
           updatedAt: Value(now),
         ),
       );
 
-      // Supprime les lignes existantes liées à cette écriture
       await (delete(ligneEcritures)
             ..where((t) => t.ecritureId.equals(ecritureId)))
           .go();
 
-      // Réinsère les lignes fournies (si présentes)
       if (lines != null && lines.isNotEmpty) {
         for (final l in lines) {
           await into(ligneEcritures).insert(
@@ -317,7 +339,6 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
-  /// Charge une écriture avec ses lignes (utile pour l'UI d'édition)
   Future<EcritureWithLines?> fetchPieceWithLines(String ecritureId) async {
     final ecrit = await (select(ecritures)
           ..where((t) => t.id.equals(ecritureId)))
@@ -328,17 +349,111 @@ class AppDatabase extends _$AppDatabase {
         .get();
     return EcritureWithLines(ecrit, lignes);
   }
+
+  // ---------------------------
+  // ATTACHMENTS
+  // ---------------------------
+
+  Future<String> addAttachment({
+    required String ecritureId,
+    required String filename,
+    required String path,
+    String? mime,
+    int? size,
+  }) async {
+    final id = _uuid.v4();
+    await into(attachments).insert(AttachmentsCompanion(
+      id: Value(id),
+      ecritureId: Value(ecritureId),
+      filename: Value(filename),
+      path: Value(path),
+      mime: Value(mime),
+      size: Value(size),
+    ));
+    return id;
+  }
+
+  // ---------------------------
+  // AUDIT LOGS
+  // ---------------------------
+
+  Future<List<AuditLog>> fetchAuditLogs({
+    String? entity,
+    String? entityId,
+    int limit = 200,
+  }) async {
+    final q = select(auditLogs)
+      ..orderBy([(t) => OrderingTerm.desc(t.createdAt)])
+      ..limit(limit);
+    if (entity != null) q.where((t) => t.entity.equals(entity));
+    if (entityId != null) q.where((t) => t.entityId.equals(entityId));
+    return q.get();
+  }
+
+  // Grand Livre : lignes d'un compte avec l'écriture jointe
+  Future<List<GrandLivreLigne>> fetchGrandLivre(int compteId) async {
+    final query = select(ligneEcritures).join([
+      innerJoin(ecritures, ecritures.id.equalsExp(ligneEcritures.ecritureId)),
+    ])
+      ..where(ligneEcritures.compteId.equals(compteId))
+      ..where(ecritures.isDeleted.equals(false))
+      ..orderBy([OrderingTerm.asc(ecritures.date)]);
+
+    final rows = await query.get();
+    return rows.map((row) {
+      return GrandLivreLigne(
+        ligne: row.readTable(ligneEcritures),
+        ecriture: row.readTable(ecritures),
+      );
+    }).toList();
+  }
+
+  // ---------------------------
+  // VALIDATION
+  // ---------------------------
+
+  void _validateEquilibre(List<LigneEcrituresCompanion> lines) {
+    final totalDebit = lines.fold(0, (s, l) => s + l.debit.value);
+    final totalCredit = lines.fold(0, (s, l) => s + l.credit.value);
+    if (totalDebit != totalCredit) {
+      throw Exception(
+        'Écriture déséquilibrée : '
+        'Débit ${totalDebit / 100} ≠ Crédit ${totalCredit / 100}',
+      );
+    }
+  }
 }
 
-/// Wrapper simple pour retourner l'entité + ses lignes
+// ---------------------------
+// WRAPPER
+// ---------------------------
+
 class EcritureWithLines {
   final Ecriture ecriture;
   final List<LigneEcriture> lignes;
   EcritureWithLines(this.ecriture, this.lignes);
 }
 
+class GrandLivreLigne {
+  final LigneEcriture ligne;
+  final Ecriture ecriture;
+  GrandLivreLigne({required this.ligne, required this.ecriture});
+}
+
+class TauxChange extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get deviseSource => text().withLength(min: 1, max: 10)();
+  TextColumn get deviseCible => text().withLength(min: 1, max: 10)();
+  RealColumn get tauxAchat => real()();
+  RealColumn get tauxVente => real()();
+  DateTimeColumn get dateDebut => dateTime()();
+  DateTimeColumn get dateFin => dateTime().nullable()();
+  DateTimeColumn get dateModification =>
+      dateTime().clientDefault(() => DateTime.now())();
+}
+
 // ---------------------------
-// LAZY DB CONNECTION
+// CONNECTION
 // ---------------------------
 
 LazyDatabase _openConnection() {

@@ -6,6 +6,8 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'daos/taux_change_dao.dart';
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 
 part 'app_database.g.dart';
 
@@ -141,6 +143,7 @@ class AuditLogs extends Table {
     Attachments,
     AuditLogs,
     TauxChange,
+    AdminConfig,
   ],
   daos: [TauxChangeDao],
 )
@@ -148,7 +151,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -159,6 +162,9 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 3) {
             await m.createTable(tauxChange);
+          }
+          if (from < 4) {
+            await m.createTable(adminConfig);
           }
         },
         beforeOpen: (details) async {
@@ -390,6 +396,59 @@ class AppDatabase extends _$AppDatabase {
     return q.get();
   }
 
+//---------------------------
+//adminConfig : table pour stocker le hash du PIN admin et le salt
+//---------------------------
+
+  /// Vérifie si un PIN admin existe déjà
+  Future<bool> hasPinConfigured() async {
+    final rows = await select(adminConfig).get();
+    return rows.isNotEmpty;
+  }
+
+  /// Crée le PIN admin (premier lancement)
+  Future<void> createPin(String pin) async {
+    final salt = _uuid.v4();
+    final hash = _hashPin(pin, salt);
+    await into(adminConfig).insert(AdminConfigCompanion(
+      id: Value(_uuid.v4()),
+      pinHash: Value(hash),
+      salt: Value(salt),
+    ));
+  }
+
+  /// Vérifie le PIN saisi
+  Future<bool> verifyPin(String pin) async {
+    final rows = await select(adminConfig).get();
+    if (rows.isEmpty) return false;
+    final config = rows.first;
+    final hash = _hashPin(pin, config.salt);
+    return hash == config.pinHash;
+  }
+
+  /// Change le PIN (après vérification de l'ancien)
+  Future<bool> changePin(String oldPin, String newPin) async {
+    if (!await verifyPin(oldPin)) return false;
+    final rows = await select(adminConfig).get();
+    final config = rows.first;
+    final newSalt = _uuid.v4();
+    final newHash = _hashPin(newPin, newSalt);
+    await (update(adminConfig)..where((t) => t.id.equals(config.id))).write(
+      AdminConfigCompanion(
+        pinHash: Value(newHash),
+        salt: Value(newSalt),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+    return true;
+  }
+
+  /// Hash simple PIN + salt (SHA-256)
+  String _hashPin(String pin, String salt) {
+    final bytes = utf8.encode('$salt:$pin');
+    return sha256.convert(bytes).toString();
+  }
+
   // Grand Livre : lignes d'un compte avec l'écriture jointe
   Future<List<GrandLivreLigne>> fetchGrandLivre(int compteId) async {
     final query = select(ligneEcritures).join([
@@ -439,6 +498,18 @@ class GrandLivreLigne {
   final Ecriture ecriture;
   GrandLivreLigne({required this.ligne, required this.ecriture});
 }
+
+class AdminConfig extends Table {
+  TextColumn get id => text().clientDefault(() => _uuid.v4())();
+  TextColumn get pinHash => text().named('pin_hash')();
+  TextColumn get salt => text()();
+  DateTimeColumn get createdAt =>
+      dateTime().clientDefault(() => DateTime.now())();
+  DateTimeColumn get updatedAt => dateTime().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+} //AdminConfig
 
 class TauxChange extends Table {
   IntColumn get id => integer().autoIncrement()();

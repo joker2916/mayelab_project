@@ -1,6 +1,9 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file/open_file.dart';
 import 'package:mayelab_project/db/app_database.dart';
 
 class GrandLivrePdfService {
@@ -133,10 +136,15 @@ class GrandLivrePdfService {
       ),
     );
 
-    await Printing.layoutPdf(
-      onLayout: (_) async => pdf.save(),
-      name: 'grand_livre_${compte.code}.pdf',
-    );
+    // ── Sauvegarde locale au lieu de Printing.layoutPdf ──
+    final bytes = await pdf.save();
+    final dir = await getApplicationDocumentsDirectory();
+    final file = File('${dir.path}/grand_livre_${compte.code}.pdf');
+    await file.writeAsBytes(bytes);
+
+    debugPrint('✅ PDF sauvegardé: ${file.path}');
+
+    await OpenFile.open(file.path);
   }
 
   static pw.Widget _totalChip(String label, String value) {

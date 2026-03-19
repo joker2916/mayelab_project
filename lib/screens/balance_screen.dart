@@ -1,11 +1,13 @@
 // lib/screens/balance_screen.dart
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:mayelab_project/balance_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file/open_file.dart';
 
 class BalanceScreen extends ConsumerStatefulWidget {
   const BalanceScreen({super.key});
@@ -59,7 +61,6 @@ class _BalanceScreenState extends ConsumerState<BalanceScreen> {
     final pdf = pw.Document();
     final fmt = NumberFormat('#,##0.00', 'fr_FR');
 
-    // Totaux
     double totD = 0, totC = 0, totSD = 0, totSC = 0;
     for (final i in items) {
       totD += i.totalDebit;
@@ -68,7 +69,6 @@ class _BalanceScreenState extends ConsumerState<BalanceScreen> {
       totSC += i.soldeCredit;
     }
 
-    // Période affichée
     String periode = 'Toutes périodes';
     if (_moisSelectionne != null && _anneeSelectionnee != null) {
       periode = '${_mois[_moisSelectionne! - 1]} $_anneeSelectionnee';
@@ -98,7 +98,6 @@ class _BalanceScreenState extends ConsumerState<BalanceScreen> {
             ])
         .toList();
 
-    // Ligne totaux
     dataRows.add([
       '',
       'TOTAUX',
@@ -165,11 +164,15 @@ class _BalanceScreenState extends ConsumerState<BalanceScreen> {
       ),
     );
 
-    // Aperçu / Impression / Partage
-    await Printing.layoutPdf(
-      onLayout: (format) => pdf.save(),
-      name: 'Balance_$periode.pdf',
-    );
+    // ── Sauvegarde locale au lieu de Printing.layoutPdf ──
+    final bytes = await pdf.save();
+    final dir = await getApplicationDocumentsDirectory();
+    final file = File('${dir.path}/Balance_$periode.pdf');
+    await file.writeAsBytes(bytes);
+
+    debugPrint('✅ PDF sauvegardé: ${file.path}');
+
+    await OpenFile.open(file.path);
   }
 
   // ══════════════════════════════════════════════════════════
@@ -185,7 +188,6 @@ class _BalanceScreenState extends ConsumerState<BalanceScreen> {
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
         actions: [
-          // ✅ BOUTON EXPORT PDF
           balanceAsync.maybeWhen(
             data: (items) => IconButton(
               icon: const Icon(Icons.picture_as_pdf),
@@ -229,7 +231,6 @@ class _BalanceScreenState extends ConsumerState<BalanceScreen> {
     );
   }
 
-  // ─── FILTRE ───────────────────────────────────────────────
   Widget _buildFiltre() {
     return Container(
       padding: const EdgeInsets.all(8),
@@ -284,7 +285,6 @@ class _BalanceScreenState extends ConsumerState<BalanceScreen> {
     );
   }
 
-  // ─── EN-TÊTE ──────────────────────────────────────────────
   Widget _buildEnTete() {
     return Container(
       color: Colors.indigo,
@@ -302,7 +302,6 @@ class _BalanceScreenState extends ConsumerState<BalanceScreen> {
     );
   }
 
-  // ─── LIGNE ────────────────────────────────────────────────
   Widget _buildLigne(BalanceItem item, int index) {
     final couleur = index.isEven ? Colors.white : Colors.grey.shade100;
     return Container(
@@ -323,7 +322,6 @@ class _BalanceScreenState extends ConsumerState<BalanceScreen> {
     );
   }
 
-  // ─── TOTAUX ───────────────────────────────────────────────
   Widget _buildTotaux(List<BalanceItem> items) {
     double totD = 0, totC = 0, totSD = 0, totSC = 0;
     for (final i in items) {
@@ -355,7 +353,6 @@ class _BalanceScreenState extends ConsumerState<BalanceScreen> {
     );
   }
 
-  // ─── HELPERS ──────────────────────────────────────────────
   Widget _celluleHeader(String texte, {int flex = 1, bool alignLeft = false}) {
     return Expanded(
       flex: flex,

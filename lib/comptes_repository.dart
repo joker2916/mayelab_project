@@ -19,8 +19,8 @@ class ComptesRepository {
     required String nom,
     required int lft,
     required int rgt,
-  }) {
-    return _db.into(_db.comptes).insert(
+  }) async {
+    final id = await _db.into(_db.comptes).insert(
           ComptesCompanion(
             code: Value(code),
             nom: Value(nom),
@@ -28,21 +28,32 @@ class ComptesRepository {
             rgt: Value(rgt),
           ),
         );
+
+    await _db.insertAuditLog(
+      entity: 'comptes',
+      entityId: id.toString(),
+      action: 'INSERT',
+    );
+
+    return id;
   }
 
   Future<void> deleteById(int id) async {
     await (_db.delete(_db.comptes)..where((t) => t.id.equals(id))).go();
+
+    await _db.insertAuditLog(
+      entity: 'comptes',
+      entityId: id.toString(),
+      action: 'DELETE',
+    );
   }
 
   Future<void> seedIfEmpty() async {
     final all = await getAll();
     if (all.isNotEmpty) return;
 
-    // Compte racine 1
     await create(code: '1', nom: 'Actif', lft: 1, rgt: 4);
-    // Sous-compte
     await create(code: '10', nom: 'Immobilisations', lft: 2, rgt: 3);
-    // Compte racine 2
     await create(code: '2', nom: 'Passif', lft: 5, rgt: 6);
   }
 }

@@ -5,9 +5,11 @@ import 'package:mayelab_project/comptes_pages.dart';
 import 'package:mayelab_project/journal_page.dart';
 import 'package:mayelab_project/ecritures_pages.dart';
 import 'package:mayelab_project/screens/balance_screen.dart';
+import 'package:mayelab_project/screens/audit_log_screen.dart';
 import 'package:mayelab_project/screens/pin_setup_screen.dart';
 import 'package:mayelab_project/screens/pin_login_screen.dart';
 import 'package:mayelab_project/services/auth_service.dart';
+import 'package:mayelab_project/services/audit_log_helper.dart';
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -25,7 +27,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-/// Gère le flux : PIN Setup → PIN Login → App principale
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
@@ -35,6 +36,7 @@ class AuthGate extends StatefulWidget {
 
 class _AuthGateState extends State<AuthGate> {
   final _authService = AuthService();
+  final _auditLog = AuditLogHelper();
   bool _loading = true;
   bool _hasPin = false;
   bool _authenticated = false;
@@ -61,16 +63,19 @@ class _AuthGateState extends State<AuthGate> {
       );
     }
 
-    // Déjà authentifié → app principale
     if (_authenticated) {
       return const MainShell();
     }
 
-    // Pas de PIN → création
     if (!_hasPin) {
       return PinSetupScreen(
         onPinCreated: (pin) async {
           await _authService.createPin(pin);
+          await _auditLog.log(
+            action: 'Création',
+            module: 'Auth',
+            details: 'PIN admin créé pour la première fois',
+          );
           setState(() {
             _hasPin = true;
             _authenticated = true;
@@ -79,12 +84,22 @@ class _AuthGateState extends State<AuthGate> {
       );
     }
 
-    // PIN existe → connexion
     return PinLoginScreen(
       onPinEntered: (pin) async {
         final ok = await _authService.verifyPin(pin);
         if (ok) {
+          await _auditLog.log(
+            action: 'Connexion',
+            module: 'Auth',
+            details: 'Connexion réussie',
+          );
           setState(() => _authenticated = true);
+        } else {
+          await _auditLog.log(
+            action: 'Connexion',
+            module: 'Auth',
+            details: 'Tentative de connexion échouée',
+          );
         }
         return ok;
       },
@@ -114,6 +129,7 @@ class _MainShellState extends State<_MainShellView> {
     EcrituresPage(),
     JournalPage(),
     BalanceScreen(),
+    AuditLogScreen(),
   ];
 
   @override
@@ -146,6 +162,11 @@ class _MainShellState extends State<_MainShellView> {
             icon: Icon(Icons.balance_outlined),
             selectedIcon: Icon(Icons.balance),
             label: 'Balance',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.history_outlined),
+            selectedIcon: Icon(Icons.history),
+            label: 'Audit',
           ),
         ],
       ),

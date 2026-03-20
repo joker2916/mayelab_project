@@ -22,14 +22,23 @@ class EcrituresRepository {
     String? reference,
     DateTime? date,
     List<LigneEcrituresCompanion>? lignes,
-  }) =>
-      db.createPieceWithLines(
-        companyId: companyId,
-        libelle: libelle,
-        reference: reference,
-        date: date,
-        lines: lignes,
-      );
+  }) async {
+    final id = await db.createPieceWithLines(
+      companyId: companyId,
+      libelle: libelle,
+      reference: reference,
+      date: date,
+      lines: lignes,
+    );
+
+    await db.insertAuditLog(
+      entity: 'ecritures',
+      entityId: id,
+      action: 'INSERT',
+    );
+
+    return id;
+  }
 
   Future<void> update({
     required String ecritureId,
@@ -37,16 +46,31 @@ class EcrituresRepository {
     String? reference,
     DateTime? date,
     List<LigneEcrituresCompanion>? lignes,
-  }) =>
-      db.updatePieceWithLines(
-        ecritureId: ecritureId,
-        libelle: libelle,
-        reference: reference,
-        date: date,
-        lines: lignes,
-      );
+  }) async {
+    await db.updatePieceWithLines(
+      ecritureId: ecritureId,
+      libelle: libelle,
+      reference: reference,
+      date: date,
+      lines: lignes,
+    );
 
-  Future<void> delete(String id) => db.deletePieceById(id);
+    await db.insertAuditLog(
+      entity: 'ecritures',
+      entityId: ecritureId,
+      action: 'UPDATE',
+    );
+  }
+
+  Future<void> delete(String id) async {
+    await db.deletePieceById(id);
+
+    await db.insertAuditLog(
+      entity: 'ecritures',
+      entityId: id,
+      action: 'DELETE',
+    );
+  }
 
   Future<EcritureWithLines?> fetchWithLines(String id) =>
       db.fetchPieceWithLines(id);

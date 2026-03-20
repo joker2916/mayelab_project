@@ -6,14 +6,12 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'daos/taux_change_dao.dart';
-import 'dart:convert';
-import 'package:crypto/crypto.dart';
 
 part 'app_database.g.dart';
 
 final _uuid = Uuid();
 
-const int RATE_SCALE = 1000000;
+const int rateScale = 1000000;
 
 // ---------------------------
 // TABLES
@@ -127,6 +125,18 @@ class AuditLogs extends Table {
       dateTime().clientDefault(() => DateTime.now())();
 }
 
+class TauxChange extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get deviseSource => text().withLength(min: 1, max: 10)();
+  TextColumn get deviseCible => text().withLength(min: 1, max: 10)();
+  RealColumn get tauxAchat => real()();
+  RealColumn get tauxVente => real()();
+  DateTimeColumn get dateDebut => dateTime()();
+  DateTimeColumn get dateFin => dateTime().nullable()();
+  DateTimeColumn get dateModification =>
+      dateTime().clientDefault(() => DateTime.now())();
+}
+
 // ---------------------------
 // DATABASE
 // ---------------------------
@@ -143,7 +153,6 @@ class AuditLogs extends Table {
     Attachments,
     AuditLogs,
     TauxChange,
-    AdminConfig,
   ],
   daos: [TauxChangeDao],
 )
@@ -151,7 +160,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -162,9 +171,6 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 3) {
             await m.createTable(tauxChange);
-          }
-          if (from < 4) {
-            await m.createTable(adminConfig);
           }
         },
         beforeOpen: (details) async {
@@ -181,15 +187,47 @@ class AppDatabase extends _$AppDatabase {
     final existing = await select(currencies).get();
     if (existing.isNotEmpty) return;
     await into(currencies).insert(CurrenciesCompanion(
-      id: Value('USD'),
-      code: Value('USD'),
-      name: Value('Dollar américain'),
+      id: const Value('USD'),
+      code: const Value('USD'),
+      name: const Value('Dollar américain'),
     ));
     await into(currencies).insert(CurrenciesCompanion(
-      id: Value('CDF'),
-      code: Value('CDF'),
-      name: Value('Franc Congolais'),
+      id: const Value('CDF'),
+      code: const Value('CDF'),
+      name: const Value('Franc Congolais'),
     ));
+  }
+
+  // ---------------------------
+  // AUDIT LOGS
+  // ---------------------------
+
+  Future<void> insertAuditLog({
+    required String entity,
+    required String action,
+    String? entityId,
+  }) async {
+    await into(auditLogs).insert(
+      AuditLogsCompanion(
+        entity: Value(entity),
+        entityId: Value(entityId),
+        action: Value(action),
+        createdAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  Future<List<AuditLog>> fetchAuditLogs({
+    String? entity,
+    String? entityId,
+    int limit = 200,
+  }) async {
+    final q = select(auditLogs)
+      ..orderBy([(t) => OrderingTerm.desc(t.createdAt)])
+      ..limit(limit);
+    if (entity != null) q.where((t) => t.entity.equals(entity));
+    if (entityId != null) q.where((t) => t.entityId.equals(entityId));
+    return q.get();
   }
 
   // ---------------------------
@@ -216,7 +254,7 @@ class AppDatabase extends _$AppDatabase {
         companyId: Value(companyId),
         journalId: Value(journalId),
         prefix: Value(prefix),
-        lastNumber: Value(1),
+        lastNumber: const Value(1),
         padding: Value(padding),
       ));
       final number = '1'.padLeft(padding, '0');
@@ -269,7 +307,7 @@ class AppDatabase extends _$AppDatabase {
         libelle: Value(libelle),
         reference: Value(finalReference),
         date: Value(date ?? now),
-        statut: Value('BROUILLON'),
+        statut: const Value('BROUILLON'),
         createdAt: Value(now),
       ));
 
@@ -284,6 +322,12 @@ class AppDatabase extends _$AppDatabase {
         }
       }
 
+      await insertAuditLog(
+        entity: 'ecritures',
+        entityId: id,
+        action: 'INSERT',
+      );
+
       return id;
     });
   }
@@ -296,13 +340,19 @@ class AppDatabase extends _$AppDatabase {
     try {
       await (update(ecritures)..where((t) => t.id.equals(id))).write(
         EcrituresCompanion(
-          isDeleted: Value(true),
+          isDeleted: const Value(true),
           updatedAt: Value(DateTime.now()),
         ),
       );
     } catch (_) {
       await (delete(ecritures)..where((t) => t.id.equals(id))).go();
     }
+
+    await insertAuditLog(
+      entity: 'ecritures',
+      entityId: id,
+      action: 'DELETE',
+    );
   }
 
   Future<void> updatePieceWithLines({
@@ -342,6 +392,12 @@ class AppDatabase extends _$AppDatabase {
           );
         }
       }
+
+      await insertAuditLog(
+        entity: 'ecritures',
+        entityId: ecritureId,
+        action: 'UPDATE',
+      );
     });
   }
 
@@ -380,76 +436,9 @@ class AppDatabase extends _$AppDatabase {
   }
 
   // ---------------------------
-  // AUDIT LOGS
+  // GRAND LIVRE
   // ---------------------------
 
-  Future<List<AuditLog>> fetchAuditLogs({
-    String? entity,
-    String? entityId,
-    int limit = 200,
-  }) async {
-    final q = select(auditLogs)
-      ..orderBy([(t) => OrderingTerm.desc(t.createdAt)])
-      ..limit(limit);
-    if (entity != null) q.where((t) => t.entity.equals(entity));
-    if (entityId != null) q.where((t) => t.entityId.equals(entityId));
-    return q.get();
-  }
-
-//---------------------------
-//adminConfig : table pour stocker le hash du PIN admin et le salt
-//---------------------------
-
-  /// Vérifie si un PIN admin existe déjà
-  Future<bool> hasPinConfigured() async {
-    final rows = await select(adminConfig).get();
-    return rows.isNotEmpty;
-  }
-
-  /// Crée le PIN admin (premier lancement)
-  Future<void> createPin(String pin) async {
-    final salt = _uuid.v4();
-    final hash = _hashPin(pin, salt);
-    await into(adminConfig).insert(AdminConfigCompanion(
-      id: Value(_uuid.v4()),
-      pinHash: Value(hash),
-      salt: Value(salt),
-    ));
-  }
-
-  /// Vérifie le PIN saisi
-  Future<bool> verifyPin(String pin) async {
-    final rows = await select(adminConfig).get();
-    if (rows.isEmpty) return false;
-    final config = rows.first;
-    final hash = _hashPin(pin, config.salt);
-    return hash == config.pinHash;
-  }
-
-  /// Change le PIN (après vérification de l'ancien)
-  Future<bool> changePin(String oldPin, String newPin) async {
-    if (!await verifyPin(oldPin)) return false;
-    final rows = await select(adminConfig).get();
-    final config = rows.first;
-    final newSalt = _uuid.v4();
-    final newHash = _hashPin(newPin, newSalt);
-    await (update(adminConfig)..where((t) => t.id.equals(config.id))).write(
-      AdminConfigCompanion(
-        pinHash: Value(newHash),
-        salt: Value(newSalt),
-        updatedAt: Value(DateTime.now()),
-      ),
-    );
-    return true;
-  }
-
-  /// Hash simple PIN + salt (SHA-256)
-  String _hashPin(String pin, String salt) {
-    final bytes = utf8.encode('$salt:$pin');
-    return sha256.convert(bytes).toString();
-  }
-
-  // Grand Livre : lignes d'un compte avec l'écriture jointe
   Future<List<GrandLivreLigne>> fetchGrandLivre(int compteId) async {
     final query = select(ligneEcritures).join([
       innerJoin(ecritures, ecritures.id.equalsExp(ligneEcritures.ecritureId)),
@@ -484,7 +473,7 @@ class AppDatabase extends _$AppDatabase {
 }
 
 // ---------------------------
-// WRAPPER
+// WRAPPERS
 // ---------------------------
 
 class EcritureWithLines {
@@ -497,30 +486,6 @@ class GrandLivreLigne {
   final LigneEcriture ligne;
   final Ecriture ecriture;
   GrandLivreLigne({required this.ligne, required this.ecriture});
-}
-
-class AdminConfig extends Table {
-  TextColumn get id => text().clientDefault(() => _uuid.v4())();
-  TextColumn get pinHash => text().named('pin_hash')();
-  TextColumn get salt => text()();
-  DateTimeColumn get createdAt =>
-      dateTime().clientDefault(() => DateTime.now())();
-  DateTimeColumn get updatedAt => dateTime().nullable()();
-
-  @override
-  Set<Column> get primaryKey => {id};
-} //AdminConfig
-
-class TauxChange extends Table {
-  IntColumn get id => integer().autoIncrement()();
-  TextColumn get deviseSource => text().withLength(min: 1, max: 10)();
-  TextColumn get deviseCible => text().withLength(min: 1, max: 10)();
-  RealColumn get tauxAchat => real()();
-  RealColumn get tauxVente => real()();
-  DateTimeColumn get dateDebut => dateTime()();
-  DateTimeColumn get dateFin => dateTime().nullable()();
-  DateTimeColumn get dateModification =>
-      dateTime().clientDefault(() => DateTime.now())();
 }
 
 // ---------------------------

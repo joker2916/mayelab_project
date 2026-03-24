@@ -5,11 +5,10 @@ import 'package:mayelab_project/comptes_pages.dart';
 import 'package:mayelab_project/journal_page.dart';
 import 'package:mayelab_project/ecritures_pages.dart';
 import 'package:mayelab_project/screens/balance_screen.dart';
-import 'package:mayelab_project/screens/audit_log_screen.dart';
+import 'package:mayelab_project/screens/grand_livre_screen.dart';
 import 'package:mayelab_project/screens/pin_setup_screen.dart';
 import 'package:mayelab_project/screens/pin_login_screen.dart';
 import 'package:mayelab_project/services/auth_service.dart';
-import 'package:mayelab_project/services/audit_log_helper.dart';
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -18,7 +17,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ProviderScope(
       child: MaterialApp(
-        title: 'Mayelab',
+        title: 'MayeLab',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(primarySwatch: Colors.blue),
         home: const AuthGate(),
@@ -27,6 +26,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
+/// Gère le flux : PIN Setup → PIN Login → App principale
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
@@ -36,7 +36,6 @@ class AuthGate extends StatefulWidget {
 
 class _AuthGateState extends State<AuthGate> {
   final _authService = AuthService();
-  final _auditLog = AuditLogHelper();
   bool _loading = true;
   bool _hasPin = false;
   bool _authenticated = false;
@@ -55,6 +54,18 @@ class _AuthGateState extends State<AuthGate> {
     });
   }
 
+  void _onPinSetupComplete() {
+    setState(() {
+      _hasPin = true;
+    });
+  }
+
+  void _onLoginSuccess() {
+    setState(() {
+      _authenticated = true;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -63,65 +74,41 @@ class _AuthGateState extends State<AuthGate> {
       );
     }
 
-    if (_authenticated) {
-      return const MainShell();
-    }
-
+    // Pas encore de PIN → écran de création
     if (!_hasPin) {
       return PinSetupScreen(
         onPinCreated: (pin) async {
           await _authService.createPin(pin);
-          await _auditLog.log(
-            action: 'Création',
-            module: 'Auth',
-            details: 'PIN admin créé pour la première fois',
-          );
-          setState(() {
-            _hasPin = true;
-            _authenticated = true;
-          });
+          _onPinSetupComplete();
         },
       );
     }
 
-    return PinLoginScreen(
-      onPinEntered: (pin) async {
-        final ok = await _authService.verifyPin(pin);
-        if (ok) {
-          await _auditLog.log(
-            action: 'Connexion',
-            module: 'Auth',
-            details: 'Connexion réussie',
-          );
-          setState(() => _authenticated = true);
-        } else {
-          await _auditLog.log(
-            action: 'Connexion',
-            module: 'Auth',
-            details: 'Tentative de connexion échouée',
-          );
-        }
-        return ok;
-      },
-    );
+    // PIN existe mais pas encore authentifié → écran de login
+    if (!_authenticated) {
+      return PinLoginScreen(
+        onPinEntered: (pin) async {
+          final ok = await _authService.verifyPin(pin);
+          if (ok) _onLoginSuccess();
+          return ok;
+        },
+      );
+    }
+
+    // Authentifié → app principale
+    return const MainShell();
   }
 }
 
-class MainShell extends ConsumerWidget {
+/// Shell principal avec Bottom Navigation (5 onglets)
+class MainShell extends StatefulWidget {
   const MainShell({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return _MainShellView();
-  }
+  State<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellView extends StatefulWidget {
-  @override
-  State<_MainShellView> createState() => _MainShellState();
-}
-
-class _MainShellState extends State<_MainShellView> {
+class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
 
   final List<Widget> _pages = const [
@@ -129,7 +116,7 @@ class _MainShellState extends State<_MainShellView> {
     EcrituresPage(),
     JournalPage(),
     BalanceScreen(),
-    AuditLogScreen(),
+    GrandLivreScreen(),
   ];
 
   @override
@@ -164,9 +151,9 @@ class _MainShellState extends State<_MainShellView> {
             label: 'Balance',
           ),
           NavigationDestination(
-            icon: Icon(Icons.history_outlined),
-            selectedIcon: Icon(Icons.history),
-            label: 'Audit',
+            icon: Icon(Icons.menu_book_outlined),
+            selectedIcon: Icon(Icons.menu_book),
+            label: 'Grand Livre',
           ),
         ],
       ),

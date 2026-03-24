@@ -418,7 +418,8 @@ class $CurrenciesTable extends Currencies
       additionalChecks:
           GeneratedColumn.checkTextLength(minTextLength: 1, maxTextLength: 10),
       type: DriftSqlType.string,
-      requiredDuringInsert: true);
+      requiredDuringInsert: true,
+      defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'));
   static const VerificationMeta _nameMeta = const VerificationMeta('name');
   @override
   late final GeneratedColumn<String> name = GeneratedColumn<String>(
@@ -1641,7 +1642,9 @@ class $EcrituresTable extends Ecritures
   @override
   late final GeneratedColumn<String> companyId = GeneratedColumn<String>(
       'company_id', aliasedName, false,
-      type: DriftSqlType.string, requiredDuringInsert: true);
+      type: DriftSqlType.string,
+      requiredDuringInsert: true,
+      $customConstraints: 'NOT NULL REFERENCES companies(id)');
   static const VerificationMeta _currencyIdMeta =
       const VerificationMeta('currencyId');
   @override
@@ -2507,7 +2510,7 @@ class $AttachmentsTable extends Attachments
       'ecriture_id', aliasedName, false,
       type: DriftSqlType.string,
       requiredDuringInsert: true,
-      $customConstraints: 'REFERENCES ecritures(id)');
+      $customConstraints: 'NOT NULL REFERENCES ecritures(id)');
   static const VerificationMeta _filenameMeta =
       const VerificationMeta('filename');
   @override
@@ -2529,9 +2532,17 @@ class $AttachmentsTable extends Attachments
   late final GeneratedColumn<int> size = GeneratedColumn<int>(
       'size', aliasedName, true,
       type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _createdAtMeta =
+      const VerificationMeta('createdAt');
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+      'created_at', aliasedName, false,
+      type: DriftSqlType.dateTime,
+      requiredDuringInsert: false,
+      clientDefault: () => DateTime.now());
   @override
   List<GeneratedColumn> get $columns =>
-      [id, ecritureId, filename, path, mime, size];
+      [id, ecritureId, filename, path, mime, size, createdAt];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -2573,6 +2584,10 @@ class $AttachmentsTable extends Attachments
       context.handle(
           _sizeMeta, size.isAcceptableOrUnknown(data['size']!, _sizeMeta));
     }
+    if (data.containsKey('created_at')) {
+      context.handle(_createdAtMeta,
+          createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
+    }
     return context;
   }
 
@@ -2594,6 +2609,8 @@ class $AttachmentsTable extends Attachments
           .read(DriftSqlType.string, data['${effectivePrefix}mime']),
       size: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}size']),
+      createdAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
     );
   }
 
@@ -2610,13 +2627,15 @@ class Attachment extends DataClass implements Insertable<Attachment> {
   final String path;
   final String? mime;
   final int? size;
+  final DateTime createdAt;
   const Attachment(
       {required this.id,
       required this.ecritureId,
       required this.filename,
       required this.path,
       this.mime,
-      this.size});
+      this.size,
+      required this.createdAt});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -2630,6 +2649,7 @@ class Attachment extends DataClass implements Insertable<Attachment> {
     if (!nullToAbsent || size != null) {
       map['size'] = Variable<int>(size);
     }
+    map['created_at'] = Variable<DateTime>(createdAt);
     return map;
   }
 
@@ -2641,6 +2661,7 @@ class Attachment extends DataClass implements Insertable<Attachment> {
       path: Value(path),
       mime: mime == null && nullToAbsent ? const Value.absent() : Value(mime),
       size: size == null && nullToAbsent ? const Value.absent() : Value(size),
+      createdAt: Value(createdAt),
     );
   }
 
@@ -2654,6 +2675,7 @@ class Attachment extends DataClass implements Insertable<Attachment> {
       path: serializer.fromJson<String>(json['path']),
       mime: serializer.fromJson<String?>(json['mime']),
       size: serializer.fromJson<int?>(json['size']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
   @override
@@ -2666,6 +2688,7 @@ class Attachment extends DataClass implements Insertable<Attachment> {
       'path': serializer.toJson<String>(path),
       'mime': serializer.toJson<String?>(mime),
       'size': serializer.toJson<int?>(size),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
 
@@ -2675,7 +2698,8 @@ class Attachment extends DataClass implements Insertable<Attachment> {
           String? filename,
           String? path,
           Value<String?> mime = const Value.absent(),
-          Value<int?> size = const Value.absent()}) =>
+          Value<int?> size = const Value.absent(),
+          DateTime? createdAt}) =>
       Attachment(
         id: id ?? this.id,
         ecritureId: ecritureId ?? this.ecritureId,
@@ -2683,6 +2707,7 @@ class Attachment extends DataClass implements Insertable<Attachment> {
         path: path ?? this.path,
         mime: mime.present ? mime.value : this.mime,
         size: size.present ? size.value : this.size,
+        createdAt: createdAt ?? this.createdAt,
       );
   Attachment copyWithCompanion(AttachmentsCompanion data) {
     return Attachment(
@@ -2693,6 +2718,7 @@ class Attachment extends DataClass implements Insertable<Attachment> {
       path: data.path.present ? data.path.value : this.path,
       mime: data.mime.present ? data.mime.value : this.mime,
       size: data.size.present ? data.size.value : this.size,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
 
@@ -2704,13 +2730,15 @@ class Attachment extends DataClass implements Insertable<Attachment> {
           ..write('filename: $filename, ')
           ..write('path: $path, ')
           ..write('mime: $mime, ')
-          ..write('size: $size')
+          ..write('size: $size, ')
+          ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, ecritureId, filename, path, mime, size);
+  int get hashCode =>
+      Object.hash(id, ecritureId, filename, path, mime, size, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -2720,7 +2748,8 @@ class Attachment extends DataClass implements Insertable<Attachment> {
           other.filename == this.filename &&
           other.path == this.path &&
           other.mime == this.mime &&
-          other.size == this.size);
+          other.size == this.size &&
+          other.createdAt == this.createdAt);
 }
 
 class AttachmentsCompanion extends UpdateCompanion<Attachment> {
@@ -2730,6 +2759,7 @@ class AttachmentsCompanion extends UpdateCompanion<Attachment> {
   final Value<String> path;
   final Value<String?> mime;
   final Value<int?> size;
+  final Value<DateTime> createdAt;
   final Value<int> rowid;
   const AttachmentsCompanion({
     this.id = const Value.absent(),
@@ -2738,6 +2768,7 @@ class AttachmentsCompanion extends UpdateCompanion<Attachment> {
     this.path = const Value.absent(),
     this.mime = const Value.absent(),
     this.size = const Value.absent(),
+    this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   AttachmentsCompanion.insert({
@@ -2747,6 +2778,7 @@ class AttachmentsCompanion extends UpdateCompanion<Attachment> {
     required String path,
     this.mime = const Value.absent(),
     this.size = const Value.absent(),
+    this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
   })  : ecritureId = Value(ecritureId),
         filename = Value(filename),
@@ -2758,6 +2790,7 @@ class AttachmentsCompanion extends UpdateCompanion<Attachment> {
     Expression<String>? path,
     Expression<String>? mime,
     Expression<int>? size,
+    Expression<DateTime>? createdAt,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -2767,6 +2800,7 @@ class AttachmentsCompanion extends UpdateCompanion<Attachment> {
       if (path != null) 'path': path,
       if (mime != null) 'mime': mime,
       if (size != null) 'size': size,
+      if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -2778,6 +2812,7 @@ class AttachmentsCompanion extends UpdateCompanion<Attachment> {
       Value<String>? path,
       Value<String?>? mime,
       Value<int?>? size,
+      Value<DateTime>? createdAt,
       Value<int>? rowid}) {
     return AttachmentsCompanion(
       id: id ?? this.id,
@@ -2786,6 +2821,7 @@ class AttachmentsCompanion extends UpdateCompanion<Attachment> {
       path: path ?? this.path,
       mime: mime ?? this.mime,
       size: size ?? this.size,
+      createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -2811,6 +2847,9 @@ class AttachmentsCompanion extends UpdateCompanion<Attachment> {
     if (size.present) {
       map['size'] = Variable<int>(size.value);
     }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -2826,6 +2865,7 @@ class AttachmentsCompanion extends UpdateCompanion<Attachment> {
           ..write('path: $path, ')
           ..write('mime: $mime, ')
           ..write('size: $size, ')
+          ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -2863,6 +2903,12 @@ class $AuditLogsTable extends AuditLogs
   late final GeneratedColumn<String> action = GeneratedColumn<String>(
       'action', aliasedName, false,
       type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _detailsMeta =
+      const VerificationMeta('details');
+  @override
+  late final GeneratedColumn<String> details = GeneratedColumn<String>(
+      'details', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
   static const VerificationMeta _createdAtMeta =
       const VerificationMeta('createdAt');
   @override
@@ -2873,7 +2919,7 @@ class $AuditLogsTable extends AuditLogs
       clientDefault: () => DateTime.now());
   @override
   List<GeneratedColumn> get $columns =>
-      [id, entity, entityId, action, createdAt];
+      [id, entity, entityId, action, details, createdAt];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -2903,6 +2949,10 @@ class $AuditLogsTable extends AuditLogs
     } else if (isInserting) {
       context.missing(_actionMeta);
     }
+    if (data.containsKey('details')) {
+      context.handle(_detailsMeta,
+          details.isAcceptableOrUnknown(data['details']!, _detailsMeta));
+    }
     if (data.containsKey('created_at')) {
       context.handle(_createdAtMeta,
           createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
@@ -2924,6 +2974,8 @@ class $AuditLogsTable extends AuditLogs
           .read(DriftSqlType.string, data['${effectivePrefix}entity_id']),
       action: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}action'])!,
+      details: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}details']),
       createdAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
     );
@@ -2940,12 +2992,14 @@ class AuditLog extends DataClass implements Insertable<AuditLog> {
   final String entity;
   final String? entityId;
   final String action;
+  final String? details;
   final DateTime createdAt;
   const AuditLog(
       {required this.id,
       required this.entity,
       this.entityId,
       required this.action,
+      this.details,
       required this.createdAt});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -2956,6 +3010,9 @@ class AuditLog extends DataClass implements Insertable<AuditLog> {
       map['entity_id'] = Variable<String>(entityId);
     }
     map['action'] = Variable<String>(action);
+    if (!nullToAbsent || details != null) {
+      map['details'] = Variable<String>(details);
+    }
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
   }
@@ -2968,6 +3025,9 @@ class AuditLog extends DataClass implements Insertable<AuditLog> {
           ? const Value.absent()
           : Value(entityId),
       action: Value(action),
+      details: details == null && nullToAbsent
+          ? const Value.absent()
+          : Value(details),
       createdAt: Value(createdAt),
     );
   }
@@ -2980,6 +3040,7 @@ class AuditLog extends DataClass implements Insertable<AuditLog> {
       entity: serializer.fromJson<String>(json['entity']),
       entityId: serializer.fromJson<String?>(json['entityId']),
       action: serializer.fromJson<String>(json['action']),
+      details: serializer.fromJson<String?>(json['details']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -2991,6 +3052,7 @@ class AuditLog extends DataClass implements Insertable<AuditLog> {
       'entity': serializer.toJson<String>(entity),
       'entityId': serializer.toJson<String?>(entityId),
       'action': serializer.toJson<String>(action),
+      'details': serializer.toJson<String?>(details),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -3000,12 +3062,14 @@ class AuditLog extends DataClass implements Insertable<AuditLog> {
           String? entity,
           Value<String?> entityId = const Value.absent(),
           String? action,
+          Value<String?> details = const Value.absent(),
           DateTime? createdAt}) =>
       AuditLog(
         id: id ?? this.id,
         entity: entity ?? this.entity,
         entityId: entityId.present ? entityId.value : this.entityId,
         action: action ?? this.action,
+        details: details.present ? details.value : this.details,
         createdAt: createdAt ?? this.createdAt,
       );
   AuditLog copyWithCompanion(AuditLogsCompanion data) {
@@ -3014,6 +3078,7 @@ class AuditLog extends DataClass implements Insertable<AuditLog> {
       entity: data.entity.present ? data.entity.value : this.entity,
       entityId: data.entityId.present ? data.entityId.value : this.entityId,
       action: data.action.present ? data.action.value : this.action,
+      details: data.details.present ? data.details.value : this.details,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -3025,13 +3090,15 @@ class AuditLog extends DataClass implements Insertable<AuditLog> {
           ..write('entity: $entity, ')
           ..write('entityId: $entityId, ')
           ..write('action: $action, ')
+          ..write('details: $details, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, entity, entityId, action, createdAt);
+  int get hashCode =>
+      Object.hash(id, entity, entityId, action, details, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -3040,6 +3107,7 @@ class AuditLog extends DataClass implements Insertable<AuditLog> {
           other.entity == this.entity &&
           other.entityId == this.entityId &&
           other.action == this.action &&
+          other.details == this.details &&
           other.createdAt == this.createdAt);
 }
 
@@ -3048,12 +3116,14 @@ class AuditLogsCompanion extends UpdateCompanion<AuditLog> {
   final Value<String> entity;
   final Value<String?> entityId;
   final Value<String> action;
+  final Value<String?> details;
   final Value<DateTime> createdAt;
   const AuditLogsCompanion({
     this.id = const Value.absent(),
     this.entity = const Value.absent(),
     this.entityId = const Value.absent(),
     this.action = const Value.absent(),
+    this.details = const Value.absent(),
     this.createdAt = const Value.absent(),
   });
   AuditLogsCompanion.insert({
@@ -3061,6 +3131,7 @@ class AuditLogsCompanion extends UpdateCompanion<AuditLog> {
     required String entity,
     this.entityId = const Value.absent(),
     required String action,
+    this.details = const Value.absent(),
     this.createdAt = const Value.absent(),
   })  : entity = Value(entity),
         action = Value(action);
@@ -3069,6 +3140,7 @@ class AuditLogsCompanion extends UpdateCompanion<AuditLog> {
     Expression<String>? entity,
     Expression<String>? entityId,
     Expression<String>? action,
+    Expression<String>? details,
     Expression<DateTime>? createdAt,
   }) {
     return RawValuesInsertable({
@@ -3076,6 +3148,7 @@ class AuditLogsCompanion extends UpdateCompanion<AuditLog> {
       if (entity != null) 'entity': entity,
       if (entityId != null) 'entity_id': entityId,
       if (action != null) 'action': action,
+      if (details != null) 'details': details,
       if (createdAt != null) 'created_at': createdAt,
     });
   }
@@ -3085,12 +3158,14 @@ class AuditLogsCompanion extends UpdateCompanion<AuditLog> {
       Value<String>? entity,
       Value<String?>? entityId,
       Value<String>? action,
+      Value<String?>? details,
       Value<DateTime>? createdAt}) {
     return AuditLogsCompanion(
       id: id ?? this.id,
       entity: entity ?? this.entity,
       entityId: entityId ?? this.entityId,
       action: action ?? this.action,
+      details: details ?? this.details,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -3110,6 +3185,9 @@ class AuditLogsCompanion extends UpdateCompanion<AuditLog> {
     if (action.present) {
       map['action'] = Variable<String>(action.value);
     }
+    if (details.present) {
+      map['details'] = Variable<String>(details.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -3123,6 +3201,7 @@ class AuditLogsCompanion extends UpdateCompanion<AuditLog> {
           ..write('entity: $entity, ')
           ..write('entityId: $entityId, ')
           ..write('action: $action, ')
+          ..write('details: $details, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -3152,7 +3231,8 @@ class $TauxChangeTable extends TauxChange
       additionalChecks:
           GeneratedColumn.checkTextLength(minTextLength: 1, maxTextLength: 10),
       type: DriftSqlType.string,
-      requiredDuringInsert: true);
+      requiredDuringInsert: true,
+      $customConstraints: 'NOT NULL REFERENCES currencies(code)');
   static const VerificationMeta _deviseCibleMeta =
       const VerificationMeta('deviseCible');
   @override
@@ -3161,7 +3241,8 @@ class $TauxChangeTable extends TauxChange
       additionalChecks:
           GeneratedColumn.checkTextLength(minTextLength: 1, maxTextLength: 10),
       type: DriftSqlType.string,
-      requiredDuringInsert: true);
+      requiredDuringInsert: true,
+      $customConstraints: 'NOT NULL REFERENCES currencies(code)');
   static const VerificationMeta _tauxAchatMeta =
       const VerificationMeta('tauxAchat');
   @override
@@ -3618,6 +3699,26 @@ typedef $$CompaniesTableUpdateCompanionBuilder = CompaniesCompanion Function({
   Value<int> rowid,
 });
 
+final class $$CompaniesTableReferences
+    extends BaseReferences<_$AppDatabase, $CompaniesTable, Company> {
+  $$CompaniesTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$EcrituresTable, List<Ecriture>>
+      _ecrituresRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+          db.ecritures,
+          aliasName:
+              $_aliasNameGenerator(db.companies.id, db.ecritures.companyId));
+
+  $$EcrituresTableProcessedTableManager get ecrituresRefs {
+    final manager = $$EcrituresTableTableManager($_db, $_db.ecritures)
+        .filter((f) => f.companyId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_ecrituresRefsTable($_db));
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: cache));
+  }
+}
+
 class $$CompaniesTableFilterComposer
     extends Composer<_$AppDatabase, $CompaniesTable> {
   $$CompaniesTableFilterComposer({
@@ -3648,6 +3749,27 @@ class $$CompaniesTableFilterComposer
 
   ColumnFilters<DateTime> get updatedAt => $composableBuilder(
       column: $table.updatedAt, builder: (column) => ColumnFilters(column));
+
+  Expression<bool> ecrituresRefs(
+      Expression<bool> Function($$EcrituresTableFilterComposer f) f) {
+    final $$EcrituresTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $db.ecritures,
+        getReferencedColumn: (t) => t.companyId,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$EcrituresTableFilterComposer(
+              $db: $db,
+              $table: $db.ecritures,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
 }
 
 class $$CompaniesTableOrderingComposer
@@ -3711,6 +3833,27 @@ class $$CompaniesTableAnnotationComposer
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  Expression<T> ecrituresRefs<T extends Object>(
+      Expression<T> Function($$EcrituresTableAnnotationComposer a) f) {
+    final $$EcrituresTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $db.ecritures,
+        getReferencedColumn: (t) => t.companyId,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$EcrituresTableAnnotationComposer(
+              $db: $db,
+              $table: $db.ecritures,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
 }
 
 class $$CompaniesTableTableManager extends RootTableManager<
@@ -3722,9 +3865,9 @@ class $$CompaniesTableTableManager extends RootTableManager<
     $$CompaniesTableAnnotationComposer,
     $$CompaniesTableCreateCompanionBuilder,
     $$CompaniesTableUpdateCompanionBuilder,
-    (Company, BaseReferences<_$AppDatabase, $CompaniesTable, Company>),
+    (Company, $$CompaniesTableReferences),
     Company,
-    PrefetchHooks Function()> {
+    PrefetchHooks Function({bool ecrituresRefs})> {
   $$CompaniesTableTableManager(_$AppDatabase db, $CompaniesTable table)
       : super(TableManagerState(
           db: db,
@@ -3776,9 +3919,35 @@ class $$CompaniesTableTableManager extends RootTableManager<
             rowid: rowid,
           ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map((e) => (
+                    e.readTable(table),
+                    $$CompaniesTableReferences(db, table, e)
+                  ))
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback: ({ecrituresRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [if (ecrituresRefs) db.ecritures],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (ecrituresRefs)
+                    await $_getPrefetchedData<Company, $CompaniesTable,
+                            Ecriture>(
+                        currentTable: table,
+                        referencedTable:
+                            $$CompaniesTableReferences._ecrituresRefsTable(db),
+                        managerFromTypedResult: (p0) =>
+                            $$CompaniesTableReferences(db, table, p0)
+                                .ecrituresRefs,
+                        referencedItemsForCurrentItem:
+                            (item, referencedItems) => referencedItems
+                                .where((e) => e.companyId == item.id),
+                        typedResults: items)
+                ];
+              },
+            );
+          },
         ));
 }
 
@@ -3791,9 +3960,9 @@ typedef $$CompaniesTableProcessedTableManager = ProcessedTableManager<
     $$CompaniesTableAnnotationComposer,
     $$CompaniesTableCreateCompanionBuilder,
     $$CompaniesTableUpdateCompanionBuilder,
-    (Company, BaseReferences<_$AppDatabase, $CompaniesTable, Company>),
+    (Company, $$CompaniesTableReferences),
     Company,
-    PrefetchHooks Function()>;
+    PrefetchHooks Function({bool ecrituresRefs})>;
 typedef $$CurrenciesTableCreateCompanionBuilder = CurrenciesCompanion Function({
   Value<String> id,
   required String code,
@@ -4755,6 +4924,21 @@ final class $$EcrituresTableReferences
     extends BaseReferences<_$AppDatabase, $EcrituresTable, Ecriture> {
   $$EcrituresTableReferences(super.$_db, super.$_table, super.$_typedResult);
 
+  static $CompaniesTable _companyIdTable(_$AppDatabase db) =>
+      db.companies.createAlias(
+          $_aliasNameGenerator(db.ecritures.companyId, db.companies.id));
+
+  $$CompaniesTableProcessedTableManager get companyId {
+    final $_column = $_itemColumn<String>('company_id')!;
+
+    final manager = $$CompaniesTableTableManager($_db, $_db.companies)
+        .filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_companyIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: [item]));
+  }
+
   static MultiTypedResultKey<$LigneEcrituresTable, List<LigneEcriture>>
       _ligneEcrituresRefsTable(_$AppDatabase db) =>
           MultiTypedResultKey.fromTable(db.ligneEcritures,
@@ -4766,21 +4950,6 @@ final class $$EcrituresTableReferences
         .filter((f) => f.ecritureId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_ligneEcrituresRefsTable($_db));
-    return ProcessedTableManager(
-        manager.$state.copyWith(prefetchedData: cache));
-  }
-
-  static MultiTypedResultKey<$AttachmentsTable, List<Attachment>>
-      _attachmentsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
-          db.attachments,
-          aliasName:
-              $_aliasNameGenerator(db.ecritures.id, db.attachments.ecritureId));
-
-  $$AttachmentsTableProcessedTableManager get attachmentsRefs {
-    final manager = $$AttachmentsTableTableManager($_db, $_db.attachments)
-        .filter((f) => f.ecritureId.id.sqlEquals($_itemColumn<String>('id')!));
-
-    final cache = $_typedResult.readTableOrNull(_attachmentsRefsTable($_db));
     return ProcessedTableManager(
         manager.$state.copyWith(prefetchedData: cache));
   }
@@ -4797,9 +4966,6 @@ class $$EcrituresTableFilterComposer
   });
   ColumnFilters<String> get id => $composableBuilder(
       column: $table.id, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<String> get companyId => $composableBuilder(
-      column: $table.companyId, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<String> get currencyId => $composableBuilder(
       column: $table.currencyId, builder: (column) => ColumnFilters(column));
@@ -4825,6 +4991,26 @@ class $$EcrituresTableFilterComposer
   ColumnFilters<DateTime> get updatedAt => $composableBuilder(
       column: $table.updatedAt, builder: (column) => ColumnFilters(column));
 
+  $$CompaniesTableFilterComposer get companyId {
+    final $$CompaniesTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.companyId,
+        referencedTable: $db.companies,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$CompaniesTableFilterComposer(
+              $db: $db,
+              $table: $db.companies,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+
   Expression<bool> ligneEcrituresRefs(
       Expression<bool> Function($$LigneEcrituresTableFilterComposer f) f) {
     final $$LigneEcrituresTableFilterComposer composer = $composerBuilder(
@@ -4845,27 +5031,6 @@ class $$EcrituresTableFilterComposer
             ));
     return f(composer);
   }
-
-  Expression<bool> attachmentsRefs(
-      Expression<bool> Function($$AttachmentsTableFilterComposer f) f) {
-    final $$AttachmentsTableFilterComposer composer = $composerBuilder(
-        composer: this,
-        getCurrentColumn: (t) => t.id,
-        referencedTable: $db.attachments,
-        getReferencedColumn: (t) => t.ecritureId,
-        builder: (joinBuilder,
-                {$addJoinBuilderToRootComposer,
-                $removeJoinBuilderFromRootComposer}) =>
-            $$AttachmentsTableFilterComposer(
-              $db: $db,
-              $table: $db.attachments,
-              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-              joinBuilder: joinBuilder,
-              $removeJoinBuilderFromRootComposer:
-                  $removeJoinBuilderFromRootComposer,
-            ));
-    return f(composer);
-  }
 }
 
 class $$EcrituresTableOrderingComposer
@@ -4879,9 +5044,6 @@ class $$EcrituresTableOrderingComposer
   });
   ColumnOrderings<String> get id => $composableBuilder(
       column: $table.id, builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<String> get companyId => $composableBuilder(
-      column: $table.companyId, builder: (column) => ColumnOrderings(column));
 
   ColumnOrderings<String> get currencyId => $composableBuilder(
       column: $table.currencyId, builder: (column) => ColumnOrderings(column));
@@ -4906,6 +5068,26 @@ class $$EcrituresTableOrderingComposer
 
   ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
       column: $table.updatedAt, builder: (column) => ColumnOrderings(column));
+
+  $$CompaniesTableOrderingComposer get companyId {
+    final $$CompaniesTableOrderingComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.companyId,
+        referencedTable: $db.companies,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$CompaniesTableOrderingComposer(
+              $db: $db,
+              $table: $db.companies,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
 }
 
 class $$EcrituresTableAnnotationComposer
@@ -4919,9 +5101,6 @@ class $$EcrituresTableAnnotationComposer
   });
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
-
-  GeneratedColumn<String> get companyId =>
-      $composableBuilder(column: $table.companyId, builder: (column) => column);
 
   GeneratedColumn<String> get currencyId => $composableBuilder(
       column: $table.currencyId, builder: (column) => column);
@@ -4947,6 +5126,26 @@ class $$EcrituresTableAnnotationComposer
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
+  $$CompaniesTableAnnotationComposer get companyId {
+    final $$CompaniesTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.companyId,
+        referencedTable: $db.companies,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$CompaniesTableAnnotationComposer(
+              $db: $db,
+              $table: $db.companies,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+
   Expression<T> ligneEcrituresRefs<T extends Object>(
       Expression<T> Function($$LigneEcrituresTableAnnotationComposer a) f) {
     final $$LigneEcrituresTableAnnotationComposer composer = $composerBuilder(
@@ -4967,27 +5166,6 @@ class $$EcrituresTableAnnotationComposer
             ));
     return f(composer);
   }
-
-  Expression<T> attachmentsRefs<T extends Object>(
-      Expression<T> Function($$AttachmentsTableAnnotationComposer a) f) {
-    final $$AttachmentsTableAnnotationComposer composer = $composerBuilder(
-        composer: this,
-        getCurrentColumn: (t) => t.id,
-        referencedTable: $db.attachments,
-        getReferencedColumn: (t) => t.ecritureId,
-        builder: (joinBuilder,
-                {$addJoinBuilderToRootComposer,
-                $removeJoinBuilderFromRootComposer}) =>
-            $$AttachmentsTableAnnotationComposer(
-              $db: $db,
-              $table: $db.attachments,
-              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-              joinBuilder: joinBuilder,
-              $removeJoinBuilderFromRootComposer:
-                  $removeJoinBuilderFromRootComposer,
-            ));
-    return f(composer);
-  }
 }
 
 class $$EcrituresTableTableManager extends RootTableManager<
@@ -5001,7 +5179,7 @@ class $$EcrituresTableTableManager extends RootTableManager<
     $$EcrituresTableUpdateCompanionBuilder,
     (Ecriture, $$EcrituresTableReferences),
     Ecriture,
-    PrefetchHooks Function({bool ligneEcrituresRefs, bool attachmentsRefs})> {
+    PrefetchHooks Function({bool companyId, bool ligneEcrituresRefs})> {
   $$EcrituresTableTableManager(_$AppDatabase db, $EcrituresTable table)
       : super(TableManagerState(
           db: db,
@@ -5071,14 +5249,38 @@ class $$EcrituresTableTableManager extends RootTableManager<
                   ))
               .toList(),
           prefetchHooksCallback: (
-              {ligneEcrituresRefs = false, attachmentsRefs = false}) {
+              {companyId = false, ligneEcrituresRefs = false}) {
             return PrefetchHooks(
               db: db,
               explicitlyWatchedTables: [
-                if (ligneEcrituresRefs) db.ligneEcritures,
-                if (attachmentsRefs) db.attachments
+                if (ligneEcrituresRefs) db.ligneEcritures
               ],
-              addJoins: null,
+              addJoins: <
+                  T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic>>(state) {
+                if (companyId) {
+                  state = state.withJoin(
+                    currentTable: table,
+                    currentColumn: table.companyId,
+                    referencedTable:
+                        $$EcrituresTableReferences._companyIdTable(db),
+                    referencedColumn:
+                        $$EcrituresTableReferences._companyIdTable(db).id,
+                  ) as T;
+                }
+
+                return state;
+              },
               getPrefetchedDataCallback: (items) async {
                 return [
                   if (ligneEcrituresRefs)
@@ -5090,19 +5292,6 @@ class $$EcrituresTableTableManager extends RootTableManager<
                         managerFromTypedResult: (p0) =>
                             $$EcrituresTableReferences(db, table, p0)
                                 .ligneEcrituresRefs,
-                        referencedItemsForCurrentItem:
-                            (item, referencedItems) => referencedItems
-                                .where((e) => e.ecritureId == item.id),
-                        typedResults: items),
-                  if (attachmentsRefs)
-                    await $_getPrefetchedData<Ecriture, $EcrituresTable,
-                            Attachment>(
-                        currentTable: table,
-                        referencedTable: $$EcrituresTableReferences
-                            ._attachmentsRefsTable(db),
-                        managerFromTypedResult: (p0) =>
-                            $$EcrituresTableReferences(db, table, p0)
-                                .attachmentsRefs,
                         referencedItemsForCurrentItem:
                             (item, referencedItems) => referencedItems
                                 .where((e) => e.ecritureId == item.id),
@@ -5125,7 +5314,7 @@ typedef $$EcrituresTableProcessedTableManager = ProcessedTableManager<
     $$EcrituresTableUpdateCompanionBuilder,
     (Ecriture, $$EcrituresTableReferences),
     Ecriture,
-    PrefetchHooks Function({bool ligneEcrituresRefs, bool attachmentsRefs})>;
+    PrefetchHooks Function({bool companyId, bool ligneEcrituresRefs})>;
 typedef $$LigneEcrituresTableCreateCompanionBuilder = LigneEcrituresCompanion
     Function({
   Value<String> id,
@@ -5502,6 +5691,7 @@ typedef $$AttachmentsTableCreateCompanionBuilder = AttachmentsCompanion
   required String path,
   Value<String?> mime,
   Value<int?> size,
+  Value<DateTime> createdAt,
   Value<int> rowid,
 });
 typedef $$AttachmentsTableUpdateCompanionBuilder = AttachmentsCompanion
@@ -5512,28 +5702,9 @@ typedef $$AttachmentsTableUpdateCompanionBuilder = AttachmentsCompanion
   Value<String> path,
   Value<String?> mime,
   Value<int?> size,
+  Value<DateTime> createdAt,
   Value<int> rowid,
 });
-
-final class $$AttachmentsTableReferences
-    extends BaseReferences<_$AppDatabase, $AttachmentsTable, Attachment> {
-  $$AttachmentsTableReferences(super.$_db, super.$_table, super.$_typedResult);
-
-  static $EcrituresTable _ecritureIdTable(_$AppDatabase db) =>
-      db.ecritures.createAlias(
-          $_aliasNameGenerator(db.attachments.ecritureId, db.ecritures.id));
-
-  $$EcrituresTableProcessedTableManager get ecritureId {
-    final $_column = $_itemColumn<String>('ecriture_id')!;
-
-    final manager = $$EcrituresTableTableManager($_db, $_db.ecritures)
-        .filter((f) => f.id.sqlEquals($_column));
-    final item = $_typedResult.readTableOrNull(_ecritureIdTable($_db));
-    if (item == null) return manager;
-    return ProcessedTableManager(
-        manager.$state.copyWith(prefetchedData: [item]));
-  }
-}
 
 class $$AttachmentsTableFilterComposer
     extends Composer<_$AppDatabase, $AttachmentsTable> {
@@ -5547,6 +5718,9 @@ class $$AttachmentsTableFilterComposer
   ColumnFilters<String> get id => $composableBuilder(
       column: $table.id, builder: (column) => ColumnFilters(column));
 
+  ColumnFilters<String> get ecritureId => $composableBuilder(
+      column: $table.ecritureId, builder: (column) => ColumnFilters(column));
+
   ColumnFilters<String> get filename => $composableBuilder(
       column: $table.filename, builder: (column) => ColumnFilters(column));
 
@@ -5559,25 +5733,8 @@ class $$AttachmentsTableFilterComposer
   ColumnFilters<int> get size => $composableBuilder(
       column: $table.size, builder: (column) => ColumnFilters(column));
 
-  $$EcrituresTableFilterComposer get ecritureId {
-    final $$EcrituresTableFilterComposer composer = $composerBuilder(
-        composer: this,
-        getCurrentColumn: (t) => t.ecritureId,
-        referencedTable: $db.ecritures,
-        getReferencedColumn: (t) => t.id,
-        builder: (joinBuilder,
-                {$addJoinBuilderToRootComposer,
-                $removeJoinBuilderFromRootComposer}) =>
-            $$EcrituresTableFilterComposer(
-              $db: $db,
-              $table: $db.ecritures,
-              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-              joinBuilder: joinBuilder,
-              $removeJoinBuilderFromRootComposer:
-                  $removeJoinBuilderFromRootComposer,
-            ));
-    return composer;
-  }
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnFilters(column));
 }
 
 class $$AttachmentsTableOrderingComposer
@@ -5592,6 +5749,9 @@ class $$AttachmentsTableOrderingComposer
   ColumnOrderings<String> get id => $composableBuilder(
       column: $table.id, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get ecritureId => $composableBuilder(
+      column: $table.ecritureId, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<String> get filename => $composableBuilder(
       column: $table.filename, builder: (column) => ColumnOrderings(column));
 
@@ -5604,25 +5764,8 @@ class $$AttachmentsTableOrderingComposer
   ColumnOrderings<int> get size => $composableBuilder(
       column: $table.size, builder: (column) => ColumnOrderings(column));
 
-  $$EcrituresTableOrderingComposer get ecritureId {
-    final $$EcrituresTableOrderingComposer composer = $composerBuilder(
-        composer: this,
-        getCurrentColumn: (t) => t.ecritureId,
-        referencedTable: $db.ecritures,
-        getReferencedColumn: (t) => t.id,
-        builder: (joinBuilder,
-                {$addJoinBuilderToRootComposer,
-                $removeJoinBuilderFromRootComposer}) =>
-            $$EcrituresTableOrderingComposer(
-              $db: $db,
-              $table: $db.ecritures,
-              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-              joinBuilder: joinBuilder,
-              $removeJoinBuilderFromRootComposer:
-                  $removeJoinBuilderFromRootComposer,
-            ));
-    return composer;
-  }
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnOrderings(column));
 }
 
 class $$AttachmentsTableAnnotationComposer
@@ -5637,6 +5780,9 @@ class $$AttachmentsTableAnnotationComposer
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
+  GeneratedColumn<String> get ecritureId => $composableBuilder(
+      column: $table.ecritureId, builder: (column) => column);
+
   GeneratedColumn<String> get filename =>
       $composableBuilder(column: $table.filename, builder: (column) => column);
 
@@ -5649,25 +5795,8 @@ class $$AttachmentsTableAnnotationComposer
   GeneratedColumn<int> get size =>
       $composableBuilder(column: $table.size, builder: (column) => column);
 
-  $$EcrituresTableAnnotationComposer get ecritureId {
-    final $$EcrituresTableAnnotationComposer composer = $composerBuilder(
-        composer: this,
-        getCurrentColumn: (t) => t.ecritureId,
-        referencedTable: $db.ecritures,
-        getReferencedColumn: (t) => t.id,
-        builder: (joinBuilder,
-                {$addJoinBuilderToRootComposer,
-                $removeJoinBuilderFromRootComposer}) =>
-            $$EcrituresTableAnnotationComposer(
-              $db: $db,
-              $table: $db.ecritures,
-              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-              joinBuilder: joinBuilder,
-              $removeJoinBuilderFromRootComposer:
-                  $removeJoinBuilderFromRootComposer,
-            ));
-    return composer;
-  }
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
 }
 
 class $$AttachmentsTableTableManager extends RootTableManager<
@@ -5679,9 +5808,9 @@ class $$AttachmentsTableTableManager extends RootTableManager<
     $$AttachmentsTableAnnotationComposer,
     $$AttachmentsTableCreateCompanionBuilder,
     $$AttachmentsTableUpdateCompanionBuilder,
-    (Attachment, $$AttachmentsTableReferences),
+    (Attachment, BaseReferences<_$AppDatabase, $AttachmentsTable, Attachment>),
     Attachment,
-    PrefetchHooks Function({bool ecritureId})> {
+    PrefetchHooks Function()> {
   $$AttachmentsTableTableManager(_$AppDatabase db, $AttachmentsTable table)
       : super(TableManagerState(
           db: db,
@@ -5699,6 +5828,7 @@ class $$AttachmentsTableTableManager extends RootTableManager<
             Value<String> path = const Value.absent(),
             Value<String?> mime = const Value.absent(),
             Value<int?> size = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               AttachmentsCompanion(
@@ -5708,6 +5838,7 @@ class $$AttachmentsTableTableManager extends RootTableManager<
             path: path,
             mime: mime,
             size: size,
+            createdAt: createdAt,
             rowid: rowid,
           ),
           createCompanionCallback: ({
@@ -5717,6 +5848,7 @@ class $$AttachmentsTableTableManager extends RootTableManager<
             required String path,
             Value<String?> mime = const Value.absent(),
             Value<int?> size = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
               AttachmentsCompanion.insert(
@@ -5726,49 +5858,13 @@ class $$AttachmentsTableTableManager extends RootTableManager<
             path: path,
             mime: mime,
             size: size,
+            createdAt: createdAt,
             rowid: rowid,
           ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (
-                    e.readTable(table),
-                    $$AttachmentsTableReferences(db, table, e)
-                  ))
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
               .toList(),
-          prefetchHooksCallback: ({ecritureId = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [],
-              addJoins: <
-                  T extends TableManagerState<
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic>>(state) {
-                if (ecritureId) {
-                  state = state.withJoin(
-                    currentTable: table,
-                    currentColumn: table.ecritureId,
-                    referencedTable:
-                        $$AttachmentsTableReferences._ecritureIdTable(db),
-                    referencedColumn:
-                        $$AttachmentsTableReferences._ecritureIdTable(db).id,
-                  ) as T;
-                }
-
-                return state;
-              },
-              getPrefetchedDataCallback: (items) async {
-                return [];
-              },
-            );
-          },
+          prefetchHooksCallback: null,
         ));
 }
 
@@ -5781,14 +5877,15 @@ typedef $$AttachmentsTableProcessedTableManager = ProcessedTableManager<
     $$AttachmentsTableAnnotationComposer,
     $$AttachmentsTableCreateCompanionBuilder,
     $$AttachmentsTableUpdateCompanionBuilder,
-    (Attachment, $$AttachmentsTableReferences),
+    (Attachment, BaseReferences<_$AppDatabase, $AttachmentsTable, Attachment>),
     Attachment,
-    PrefetchHooks Function({bool ecritureId})>;
+    PrefetchHooks Function()>;
 typedef $$AuditLogsTableCreateCompanionBuilder = AuditLogsCompanion Function({
   Value<int> id,
   required String entity,
   Value<String?> entityId,
   required String action,
+  Value<String?> details,
   Value<DateTime> createdAt,
 });
 typedef $$AuditLogsTableUpdateCompanionBuilder = AuditLogsCompanion Function({
@@ -5796,6 +5893,7 @@ typedef $$AuditLogsTableUpdateCompanionBuilder = AuditLogsCompanion Function({
   Value<String> entity,
   Value<String?> entityId,
   Value<String> action,
+  Value<String?> details,
   Value<DateTime> createdAt,
 });
 
@@ -5819,6 +5917,9 @@ class $$AuditLogsTableFilterComposer
 
   ColumnFilters<String> get action => $composableBuilder(
       column: $table.action, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get details => $composableBuilder(
+      column: $table.details, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnFilters(column));
@@ -5845,6 +5946,9 @@ class $$AuditLogsTableOrderingComposer
   ColumnOrderings<String> get action => $composableBuilder(
       column: $table.action, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get details => $composableBuilder(
+      column: $table.details, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnOrderings(column));
 }
@@ -5869,6 +5973,9 @@ class $$AuditLogsTableAnnotationComposer
 
   GeneratedColumn<String> get action =>
       $composableBuilder(column: $table.action, builder: (column) => column);
+
+  GeneratedColumn<String> get details =>
+      $composableBuilder(column: $table.details, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -5901,6 +6008,7 @@ class $$AuditLogsTableTableManager extends RootTableManager<
             Value<String> entity = const Value.absent(),
             Value<String?> entityId = const Value.absent(),
             Value<String> action = const Value.absent(),
+            Value<String?> details = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
           }) =>
               AuditLogsCompanion(
@@ -5908,6 +6016,7 @@ class $$AuditLogsTableTableManager extends RootTableManager<
             entity: entity,
             entityId: entityId,
             action: action,
+            details: details,
             createdAt: createdAt,
           ),
           createCompanionCallback: ({
@@ -5915,6 +6024,7 @@ class $$AuditLogsTableTableManager extends RootTableManager<
             required String entity,
             Value<String?> entityId = const Value.absent(),
             required String action,
+            Value<String?> details = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
           }) =>
               AuditLogsCompanion.insert(
@@ -5922,6 +6032,7 @@ class $$AuditLogsTableTableManager extends RootTableManager<
             entity: entity,
             entityId: entityId,
             action: action,
+            details: details,
             createdAt: createdAt,
           ),
           withReferenceMapper: (p0) => p0
@@ -5964,6 +6075,41 @@ typedef $$TauxChangeTableUpdateCompanionBuilder = TauxChangeCompanion Function({
   Value<DateTime> dateModification,
 });
 
+final class $$TauxChangeTableReferences
+    extends BaseReferences<_$AppDatabase, $TauxChangeTable, TauxChangeData> {
+  $$TauxChangeTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $CurrenciesTable _deviseSourceTable(_$AppDatabase db) =>
+      db.currencies.createAlias(
+          $_aliasNameGenerator(db.tauxChange.deviseSource, db.currencies.code));
+
+  $$CurrenciesTableProcessedTableManager get deviseSource {
+    final $_column = $_itemColumn<String>('devise_source')!;
+
+    final manager = $$CurrenciesTableTableManager($_db, $_db.currencies)
+        .filter((f) => f.code.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_deviseSourceTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: [item]));
+  }
+
+  static $CurrenciesTable _deviseCibleTable(_$AppDatabase db) =>
+      db.currencies.createAlias(
+          $_aliasNameGenerator(db.tauxChange.deviseCible, db.currencies.code));
+
+  $$CurrenciesTableProcessedTableManager get deviseCible {
+    final $_column = $_itemColumn<String>('devise_cible')!;
+
+    final manager = $$CurrenciesTableTableManager($_db, $_db.currencies)
+        .filter((f) => f.code.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_deviseCibleTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: [item]));
+  }
+}
+
 class $$TauxChangeTableFilterComposer
     extends Composer<_$AppDatabase, $TauxChangeTable> {
   $$TauxChangeTableFilterComposer({
@@ -5975,12 +6121,6 @@ class $$TauxChangeTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
       column: $table.id, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<String> get deviseSource => $composableBuilder(
-      column: $table.deviseSource, builder: (column) => ColumnFilters(column));
-
-  ColumnFilters<String> get deviseCible => $composableBuilder(
-      column: $table.deviseCible, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<double> get tauxAchat => $composableBuilder(
       column: $table.tauxAchat, builder: (column) => ColumnFilters(column));
@@ -5997,6 +6137,46 @@ class $$TauxChangeTableFilterComposer
   ColumnFilters<DateTime> get dateModification => $composableBuilder(
       column: $table.dateModification,
       builder: (column) => ColumnFilters(column));
+
+  $$CurrenciesTableFilterComposer get deviseSource {
+    final $$CurrenciesTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.deviseSource,
+        referencedTable: $db.currencies,
+        getReferencedColumn: (t) => t.code,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$CurrenciesTableFilterComposer(
+              $db: $db,
+              $table: $db.currencies,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+
+  $$CurrenciesTableFilterComposer get deviseCible {
+    final $$CurrenciesTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.deviseCible,
+        referencedTable: $db.currencies,
+        getReferencedColumn: (t) => t.code,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$CurrenciesTableFilterComposer(
+              $db: $db,
+              $table: $db.currencies,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
 }
 
 class $$TauxChangeTableOrderingComposer
@@ -6010,13 +6190,6 @@ class $$TauxChangeTableOrderingComposer
   });
   ColumnOrderings<int> get id => $composableBuilder(
       column: $table.id, builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<String> get deviseSource => $composableBuilder(
-      column: $table.deviseSource,
-      builder: (column) => ColumnOrderings(column));
-
-  ColumnOrderings<String> get deviseCible => $composableBuilder(
-      column: $table.deviseCible, builder: (column) => ColumnOrderings(column));
 
   ColumnOrderings<double> get tauxAchat => $composableBuilder(
       column: $table.tauxAchat, builder: (column) => ColumnOrderings(column));
@@ -6033,6 +6206,46 @@ class $$TauxChangeTableOrderingComposer
   ColumnOrderings<DateTime> get dateModification => $composableBuilder(
       column: $table.dateModification,
       builder: (column) => ColumnOrderings(column));
+
+  $$CurrenciesTableOrderingComposer get deviseSource {
+    final $$CurrenciesTableOrderingComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.deviseSource,
+        referencedTable: $db.currencies,
+        getReferencedColumn: (t) => t.code,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$CurrenciesTableOrderingComposer(
+              $db: $db,
+              $table: $db.currencies,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+
+  $$CurrenciesTableOrderingComposer get deviseCible {
+    final $$CurrenciesTableOrderingComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.deviseCible,
+        referencedTable: $db.currencies,
+        getReferencedColumn: (t) => t.code,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$CurrenciesTableOrderingComposer(
+              $db: $db,
+              $table: $db.currencies,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
 }
 
 class $$TauxChangeTableAnnotationComposer
@@ -6046,12 +6259,6 @@ class $$TauxChangeTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
-
-  GeneratedColumn<String> get deviseSource => $composableBuilder(
-      column: $table.deviseSource, builder: (column) => column);
-
-  GeneratedColumn<String> get deviseCible => $composableBuilder(
-      column: $table.deviseCible, builder: (column) => column);
 
   GeneratedColumn<double> get tauxAchat =>
       $composableBuilder(column: $table.tauxAchat, builder: (column) => column);
@@ -6067,6 +6274,46 @@ class $$TauxChangeTableAnnotationComposer
 
   GeneratedColumn<DateTime> get dateModification => $composableBuilder(
       column: $table.dateModification, builder: (column) => column);
+
+  $$CurrenciesTableAnnotationComposer get deviseSource {
+    final $$CurrenciesTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.deviseSource,
+        referencedTable: $db.currencies,
+        getReferencedColumn: (t) => t.code,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$CurrenciesTableAnnotationComposer(
+              $db: $db,
+              $table: $db.currencies,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+
+  $$CurrenciesTableAnnotationComposer get deviseCible {
+    final $$CurrenciesTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.deviseCible,
+        referencedTable: $db.currencies,
+        getReferencedColumn: (t) => t.code,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$CurrenciesTableAnnotationComposer(
+              $db: $db,
+              $table: $db.currencies,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
 }
 
 class $$TauxChangeTableTableManager extends RootTableManager<
@@ -6078,12 +6325,9 @@ class $$TauxChangeTableTableManager extends RootTableManager<
     $$TauxChangeTableAnnotationComposer,
     $$TauxChangeTableCreateCompanionBuilder,
     $$TauxChangeTableUpdateCompanionBuilder,
-    (
-      TauxChangeData,
-      BaseReferences<_$AppDatabase, $TauxChangeTable, TauxChangeData>
-    ),
+    (TauxChangeData, $$TauxChangeTableReferences),
     TauxChangeData,
-    PrefetchHooks Function()> {
+    PrefetchHooks Function({bool deviseSource, bool deviseCible})> {
   $$TauxChangeTableTableManager(_$AppDatabase db, $TauxChangeTable table)
       : super(TableManagerState(
           db: db,
@@ -6135,9 +6379,56 @@ class $$TauxChangeTableTableManager extends RootTableManager<
             dateModification: dateModification,
           ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map((e) => (
+                    e.readTable(table),
+                    $$TauxChangeTableReferences(db, table, e)
+                  ))
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback: ({deviseSource = false, deviseCible = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins: <
+                  T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic>>(state) {
+                if (deviseSource) {
+                  state = state.withJoin(
+                    currentTable: table,
+                    currentColumn: table.deviseSource,
+                    referencedTable:
+                        $$TauxChangeTableReferences._deviseSourceTable(db),
+                    referencedColumn:
+                        $$TauxChangeTableReferences._deviseSourceTable(db).code,
+                  ) as T;
+                }
+                if (deviseCible) {
+                  state = state.withJoin(
+                    currentTable: table,
+                    currentColumn: table.deviseCible,
+                    referencedTable:
+                        $$TauxChangeTableReferences._deviseCibleTable(db),
+                    referencedColumn:
+                        $$TauxChangeTableReferences._deviseCibleTable(db).code,
+                  ) as T;
+                }
+
+                return state;
+              },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
         ));
 }
 
@@ -6150,12 +6441,9 @@ typedef $$TauxChangeTableProcessedTableManager = ProcessedTableManager<
     $$TauxChangeTableAnnotationComposer,
     $$TauxChangeTableCreateCompanionBuilder,
     $$TauxChangeTableUpdateCompanionBuilder,
-    (
-      TauxChangeData,
-      BaseReferences<_$AppDatabase, $TauxChangeTable, TauxChangeData>
-    ),
+    (TauxChangeData, $$TauxChangeTableReferences),
     TauxChangeData,
-    PrefetchHooks Function()>;
+    PrefetchHooks Function({bool deviseSource, bool deviseCible})>;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;

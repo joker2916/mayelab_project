@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'daos/taux_change_dao.dart';
+import 'package:mayelab_project/db/attachements_table.dart';
 
 part 'app_database.g.dart';
 
@@ -34,7 +35,7 @@ class Companies extends Table {
 
 class Currencies extends Table {
   TextColumn get id => text().clientDefault(() => _uuid.v4())();
-  TextColumn get code => text().withLength(min: 1, max: 10)();
+  TextColumn get code => text().withLength(min: 1, max: 10).unique()();
   TextColumn get name => text().nullable()();
   @override
   Set<Column> get primaryKey => {id};
@@ -75,7 +76,9 @@ class Comptes extends Table {
 
 class Ecritures extends Table {
   TextColumn get id => text().clientDefault(() => _uuid.v4())();
-  TextColumn get companyId => text()();
+  TextColumn get companyId =>
+      text().customConstraint('NOT NULL REFERENCES companies(id)')();
+
   TextColumn get currencyId => text()
       .nullable()
       .customConstraint('NULLABLE REFERENCES currencies(id)')();
@@ -87,6 +90,7 @@ class Ecritures extends Table {
   DateTimeColumn get createdAt =>
       dateTime().clientDefault(() => DateTime.now())();
   DateTimeColumn get updatedAt => dateTime().nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }
@@ -104,31 +108,25 @@ class LigneEcritures extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-class Attachments extends Table {
-  TextColumn get id => text().clientDefault(() => _uuid.v4())();
-  TextColumn get ecritureId =>
-      text().customConstraint('REFERENCES ecritures(id)')();
-  TextColumn get filename => text()();
-  TextColumn get path => text()();
-  TextColumn get mime => text().nullable()();
-  IntColumn get size => integer().nullable()();
-  @override
-  Set<Column> get primaryKey => {id};
-}
-
 class AuditLogs extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get entity => text()();
   TextColumn get entityId => text().nullable()();
   TextColumn get action => text()();
+  TextColumn get details => text().nullable()();
   DateTimeColumn get createdAt =>
       dateTime().clientDefault(() => DateTime.now())();
 }
 
 class TauxChange extends Table {
   IntColumn get id => integer().autoIncrement()();
-  TextColumn get deviseSource => text().withLength(min: 1, max: 10)();
-  TextColumn get deviseCible => text().withLength(min: 1, max: 10)();
+  TextColumn get deviseSource => text()
+      .withLength(min: 1, max: 10)
+      .customConstraint('NOT NULL REFERENCES currencies(code)')();
+  TextColumn get deviseCible => text()
+      .withLength(min: 1, max: 10)
+      .customConstraint('NOT NULL REFERENCES currencies(code)')();
+
   RealColumn get tauxAchat => real()();
   RealColumn get tauxVente => real()();
   DateTimeColumn get dateDebut => dateTime()();
@@ -160,7 +158,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -172,8 +170,16 @@ class AppDatabase extends _$AppDatabase {
           if (from < 3) {
             await m.createTable(tauxChange);
           }
+          if (from < 4) {
+            // Nouvelle colonne details dans AuditLogs
+            await m.addColumn(auditLogs, auditLogs.details);
+            await customStatement('''
+              DELETE FROM ecritures
+              where company_id NOT IN (SELECT id FROM companies)
+            ''');
+          }
         },
-        beforeOpen: (details) async {
+        beforeOpen: (openingDetails) async {
           await customStatement('PRAGMA foreign_keys = ON');
           await _seedCurrencies();
         },

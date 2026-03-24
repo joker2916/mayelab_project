@@ -174,7 +174,10 @@ class _EcrituresPageState extends ConsumerState<EcrituresPage> {
                               children: [
                                 // Sélecteur de compte
                                 DropdownButtonFormField<int>(
-                                  value: ligne['compteId'] as int,
+                                  value: comptes
+                                          .any((c) => c.id == ligne['compteId'])
+                                      ? ligne['compteId'] as int
+                                      : comptes.first.id,
                                   decoration: const InputDecoration(
                                       labelText: 'Compte'),
                                   items: comptes

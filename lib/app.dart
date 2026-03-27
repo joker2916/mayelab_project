@@ -146,7 +146,7 @@ class _MainShellState extends State<MainShell> {
             label: 'Journal',
           ),
           NavigationDestination(
-            icon: Icon(Icons.balance_outlined),
+            icon: Icon(Icons.table_chart_outlined),
             selectedIcon: Icon(Icons.balance),
             label: 'Balance',
           ),

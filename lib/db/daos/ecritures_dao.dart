@@ -1,4 +1,3 @@
-// lib/db/daos/ecritures_dao.dart
 import 'package:drift/drift.dart';
 import '../app_database.dart';
 

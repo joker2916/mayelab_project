@@ -182,6 +182,7 @@ class AppDatabase extends _$AppDatabase {
         beforeOpen: (openingDetails) async {
           await customStatement('PRAGMA foreign_keys = ON');
           await _seedCurrencies();
+          await _seedDefaultCompany();
         },
       );
 
@@ -204,6 +205,22 @@ class AppDatabase extends _$AppDatabase {
     ));
   }
 
+  Future<void> _seedDefaultCompany() async {
+    final existing = await (select(companies)
+          ..where((c) => c.id.equals('default-company')))
+        .getSingleOrNull();
+    if (existing != null) return;
+
+    await into(companies).insert(
+      CompaniesCompanion(
+        id: const Value('default-company'),
+        name: const Value('Société par défaut'),
+        currencyDefault: const Value('USD'),
+        active: const Value(true),
+      ),
+    );
+  }
+
   // ---------------------------
   // AUDIT LOGS
   // ---------------------------
@@ -212,12 +229,14 @@ class AppDatabase extends _$AppDatabase {
     required String entity,
     required String action,
     String? entityId,
+    String? details,
   }) async {
     await into(auditLogs).insert(
       AuditLogsCompanion(
         entity: Value(entity),
         entityId: Value(entityId),
         action: Value(action),
+        details: Value(details),
         createdAt: Value(DateTime.now()),
       ),
     );

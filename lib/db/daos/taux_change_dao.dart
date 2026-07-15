@@ -6,7 +6,7 @@ part 'taux_change_dao.g.dart';
 @DriftAccessor(tables: [TauxChange])
 class TauxChangeDao extends DatabaseAccessor<AppDatabase>
     with _$TauxChangeDaoMixin {
-  TauxChangeDao(AppDatabase db) : super(db);
+  TauxChangeDao(super.db);
 
   Future<List<TauxChangeData>> getAllTauxChange() => select(tauxChange).get();
 

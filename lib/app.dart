@@ -4,11 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mayelab_project/comptes_pages.dart';
 import 'package:mayelab_project/journal_page.dart';
 import 'package:mayelab_project/ecritures_pages.dart';
-import 'package:mayelab_project/screens/balance_screen.dart';
-import 'package:mayelab_project/screens/grand_livre_screen.dart';
-import 'package:mayelab_project/screens/pin_setup_screen.dart';
-import 'package:mayelab_project/screens/pin_login_screen.dart';
+import 'package:mayelab_project/balance_page.dart';
+import 'package:mayelab_project/grand_livre_page.dart';
+import 'package:mayelab_project/pin_setup_page.dart';
+import 'package:mayelab_project/pin_login_page.dart';
 import 'package:mayelab_project/services/auth_service.dart';
+import 'package:mayelab_project/theme/app_theme.dart';
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -19,7 +20,7 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         title: 'MayeLab',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(primarySwatch: Colors.blue),
+        theme: AppTheme.lightTheme(),
         home: const AuthGate(),
       ),
     );
@@ -76,7 +77,7 @@ class _AuthGateState extends State<AuthGate> {
 
     // Pas encore de PIN → écran de création
     if (!_hasPin) {
-      return PinSetupScreen(
+      return PinSetupPage(
         onPinCreated: (pin) async {
           await _authService.createPin(pin);
           _onPinSetupComplete();
@@ -86,11 +87,11 @@ class _AuthGateState extends State<AuthGate> {
 
     // PIN existe mais pas encore authentifié → écran de login
     if (!_authenticated) {
-      return PinLoginScreen(
+      return PinLoginPage(
         onPinEntered: (pin) async {
-          final ok = await _authService.verifyPin(pin);
-          if (ok) _onLoginSuccess();
-          return ok;
+          final result = await _authService.verifyPinWithStatus(pin);
+          if (result.isSuccess) _onLoginSuccess();
+          return result;
         },
       );
     }
@@ -115,8 +116,8 @@ class _MainShellState extends State<MainShell> {
     ComptesPage(),
     EcrituresPage(),
     JournalPage(),
-    BalanceScreen(),
-    GrandLivreScreen(),
+    BalancePage(),
+    GrandLivrePage(),
   ];
 
   @override

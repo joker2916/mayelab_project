@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:mayelab_project/services/auth_service.dart';
 
-class PinLoginScreen extends StatefulWidget {
-  final Future<bool> Function(String pin) onPinEntered;
+class PinLoginPage extends StatefulWidget {
+  final Future<PinAuthResult> Function(String pin) onPinEntered;
 
-  const PinLoginScreen({super.key, required this.onPinEntered});
+  const PinLoginPage({super.key, required this.onPinEntered});
 
   @override
-  State<PinLoginScreen> createState() => _PinLoginScreenState();
+  State<PinLoginPage> createState() => _PinLoginPageState();
 }
 
-class _PinLoginScreenState extends State<PinLoginScreen> {
+class _PinLoginPageState extends State<PinLoginPage> {
   final _pinController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _loading = false;
@@ -30,9 +31,16 @@ class _PinLoginScreenState extends State<PinLoginScreen> {
       _error = null;
     });
     try {
-      final ok = await widget.onPinEntered(_pinController.text.trim());
-      if (!ok && mounted) {
-        setState(() => _error = 'Code PIN incorrect');
+      final result = await widget.onPinEntered(_pinController.text.trim());
+      if (mounted && !result.isSuccess) {
+        final message = switch (result.status) {
+          PinAuthStatus.locked =>
+            'Trop de tentatives. Réessaie dans ${result.remainingSeconds ?? 0}s.',
+          PinAuthStatus.notConfigured => 'Aucun PIN configuré.',
+          PinAuthStatus.invalid => 'Code PIN incorrect',
+          PinAuthStatus.success => null,
+        };
+        setState(() => _error = message);
         _pinController.clear();
       }
     } catch (e) {

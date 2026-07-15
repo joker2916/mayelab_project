@@ -1,11 +1,11 @@
-// lib/screens/balance_screen.dart
+// lib/screens/balancePage.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import '../balance_provider.dart';
+import 'balance_provider.dart';
 
-class BalanceScreen extends ConsumerWidget {
-  const BalanceScreen({super.key});
+class BalancePage extends ConsumerWidget {
+  const BalancePage({super.key});
 
   String _formatMontant(double montant) {
     final format = NumberFormat('#,##0.00', 'fr_FR');

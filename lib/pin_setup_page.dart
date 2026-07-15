@@ -3,16 +3,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-class PinSetupScreen extends StatefulWidget {
+class PinSetupPage extends StatefulWidget {
   final Future<void> Function(String pin) onPinCreated;
 
-  const PinSetupScreen({super.key, required this.onPinCreated});
+  const PinSetupPage({super.key, required this.onPinCreated});
 
   @override
-  State<PinSetupScreen> createState() => _PinSetupScreenState();
+  State<PinSetupPage> createState() => _PinSetupPageState();
 }
 
-class _PinSetupScreenState extends State<PinSetupScreen> {
+class _PinSetupPageState extends State<PinSetupPage> {
   final _pinController = TextEditingController();
   final _confirmController = TextEditingController();
   final _formKey = GlobalKey<FormState>();

@@ -4,14 +4,14 @@ import 'package:mayelab_project/db/app_database.dart';
 import 'package:mayelab_project/providers.dart';
 import 'package:mayelab_project/services/grand_livre_pdf_service.dart';
 
-class GrandLivreScreen extends ConsumerStatefulWidget {
-  const GrandLivreScreen({super.key});
+class GrandLivrePage extends ConsumerStatefulWidget {
+  const GrandLivrePage({super.key});
 
   @override
-  ConsumerState<GrandLivreScreen> createState() => _GrandLivreScreenState();
+  ConsumerState<GrandLivrePage> createState() => _GrandLivrePageState();
 }
 
-class _GrandLivreScreenState extends ConsumerState<GrandLivreScreen> {
+class _GrandLivrePageState extends ConsumerState<GrandLivrePage> {
   Compte? _selectedCompte;
 
   @override
@@ -52,7 +52,7 @@ class _GrandLivreScreenState extends ConsumerState<GrandLivreScreen> {
               loading: () => const CircularProgressIndicator(),
               error: (e, _) => Text('Erreur: $e'),
               data: (comptes) => DropdownButtonFormField<Compte>(
-                value: _selectedCompte,
+                initialValue: _selectedCompte,
                 decoration: InputDecoration(
                   labelText: 'Sélectionner un compte',
                   border: OutlineInputBorder(
@@ -284,9 +284,9 @@ class _TotalChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.4)),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: RichText(
         text: TextSpan(

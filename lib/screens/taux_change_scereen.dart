@@ -52,7 +52,7 @@ class _TauxChangeScreenState extends ConsumerState<TauxChangeScreen> {
                   leading: CircleAvatar(
                     backgroundColor: Colors.teal,
                     child: Text(
-                      '${t.deviseSource}',
+                      t.deviseSource,
                       style: const TextStyle(color: Colors.white, fontSize: 10),
                     ),
                   ),
@@ -234,8 +234,9 @@ class _TauxChangeScreenState extends ConsumerState<TauxChangeScreen> {
                             decimal: true),
                         validator: (v) {
                           if (v == null || v.isEmpty) return 'Requis';
-                          if (double.tryParse(v) == null)
+                          if (double.tryParse(v) == null) {
                             return 'Nombre invalide';
+                          }
                           return null;
                         },
                       ),
@@ -253,8 +254,9 @@ class _TauxChangeScreenState extends ConsumerState<TauxChangeScreen> {
                             decimal: true),
                         validator: (v) {
                           if (v == null || v.isEmpty) return 'Requis';
-                          if (double.tryParse(v) == null)
+                          if (double.tryParse(v) == null) {
                             return 'Nombre invalide';
+                          }
                           return null;
                         },
                       ),

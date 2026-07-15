@@ -5,26 +5,31 @@ import 'package:mayelab_project/db/app_database.dart';
 class AuditLogHelper {
   final AppDatabase _db;
 
-  static AuditLogHelper? _instance;
+  AuditLogHelper(this._db);
 
-  factory AuditLogHelper(AppDatabase db) {
-    _instance ??= AuditLogHelper._internal(db);
-    return _instance!;
+  String _normalize(String value) {
+    return value
+        .trim()
+        .toLowerCase()
+        .replaceAll('é', 'e')
+        .replaceAll('è', 'e')
+        .replaceAll('ê', 'e')
+        .replaceAll('à', 'a');
   }
-
-  AuditLogHelper._internal(this._db);
 
   /// Enregistrer une action
   Future<void> log({
     required String action,
     required String module,
+    String? entityId,
     String? details,
   }) async {
-    await _db.into(_db.auditLogs).insert(AuditLogsCompanion(
-          entity: Value(module),
-          entityId: Value(details),
-          action: Value(action),
-        ));
+    await _db.insertAuditLog(
+      entity: module,
+      action: action,
+      entityId: entityId,
+      details: details,
+    );
   }
 
   /// Récupérer tous les logs
@@ -36,10 +41,9 @@ class AuditLogHelper {
 
   /// Filtrer par module
   Future<List<AuditLog>> getLogsByModule(String module) async {
-    return await (_db.select(_db.auditLogs)
-          ..where((t) => t.entity.equals(module))
-          ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
-        .get();
+    final target = _normalize(module);
+    final logs = await getAllLogs();
+    return logs.where((l) => _normalize(l.entity) == target).toList();
   }
 
   /// Filtrer par période

@@ -35,6 +35,7 @@ final balanceFiltreProvider =
 final balanceProvider = FutureProvider<List<BalanceItem>>((ref) async {
   final db = ref.watch(databaseProvider);
   final filtre = ref.watch(balanceFiltreProvider);
+  ref.watch(ecrituresStreamProvider);
 
   String whereClause = 'WHERE e.is_deleted = 0';
   List<Variable<Object>> variables = [];

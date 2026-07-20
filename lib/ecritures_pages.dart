@@ -25,8 +25,28 @@ bool _isAmountInputValid(String raw) {
   return RegExp(r'^\d+([\.,]\d{0,2})?$').hasMatch(text);
 }
 
+class EcrituresPageController {
+  VoidCallback? _openComposer;
+
+  void _bind(VoidCallback callback) {
+    _openComposer = callback;
+  }
+
+  void _unbind(VoidCallback callback) {
+    if (_openComposer == callback) {
+      _openComposer = null;
+    }
+  }
+
+  void openComposer() {
+    _openComposer?.call();
+  }
+}
+
 class EcrituresPage extends ConsumerStatefulWidget {
-  const EcrituresPage({super.key});
+  const EcrituresPage({super.key, this.controller});
+
+  final EcrituresPageController? controller;
 
   @override
   ConsumerState<EcrituresPage> createState() => _EcrituresPageState();
@@ -36,13 +56,38 @@ class _EcrituresPageState extends ConsumerState<EcrituresPage> {
   static const String _companyId = 'default-company';
 
   @override
+  void initState() {
+    super.initState();
+    widget.controller?._bind(_handleOpenComposer);
+  }
+
+  @override
+  void didUpdateWidget(covariant EcrituresPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller?._unbind(_handleOpenComposer);
+      widget.controller?._bind(_handleOpenComposer);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller?._unbind(_handleOpenComposer);
+    super.dispose();
+  }
+
+  void _handleOpenComposer() {
+    _ouvrirFormulaire();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final ecrituresAsync = ref.watch(ecrituresStreamProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Écritures'), elevation: 0),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _ouvrirFormulaire(),
+        onPressed: _handleOpenComposer,
         icon: const Icon(Icons.add),
         label: const Text('Nouvelle écriture'),
       ),
@@ -104,6 +149,9 @@ class _EcrituresPageState extends ConsumerState<EcrituresPage> {
 
   void _ouvrirFormulaire({EcritureWithLines? existing}) async {
     final repo = ref.read(ecrituresRepositoryProvider);
+    final comptesRepo = ref.read(comptesRepositoryProvider);
+
+    await comptesRepo.seedIfEmpty();
     final comptes = await repo.getComptes();
 
     if (comptes.isEmpty) {
@@ -359,6 +407,8 @@ class _EcritureFormSheetState extends State<_EcritureFormSheet> {
   late DateTime _date;
   String _selectedCurrency = 'USD';
   late List<Map<String, dynamic>> _lignes;
+  String? _feedbackMessage;
+  bool _feedbackIsError = false;
 
   @override
   void initState() {
@@ -369,23 +419,49 @@ class _EcritureFormSheetState extends State<_EcritureFormSheet> {
         TextEditingController(text: widget.existing?.ecriture.reference ?? '');
     _date = widget.existing?.ecriture.date ?? DateTime.now();
 
-    _lignes = widget.existing != null
-        ? widget.existing!.lignes
-            .map((l) => {
-                  'compteId': l.compteId,
-                  'debit': l.debit,
-                  'credit': l.credit,
-                  'description': l.description ?? '',
-                })
-            .toList()
-        : [
-            {
-              'compteId': widget.comptes.first.id,
-              'debit': 0,
-              'credit': 0,
-              'description': ''
-            }
-          ];
+    if (widget.existing != null) {
+      _lignes = widget.existing!.lignes
+          .map((l) => {
+                'compteId': l.compteId,
+                'debit': l.debit,
+                'credit': l.credit,
+                'description': l.description ?? '',
+              })
+          .toList();
+    } else {
+      final firstAccountId = widget.comptes.first.id;
+      final secondAccountId = widget.comptes.length > 1
+          ? widget.comptes[1].id
+          : widget.comptes.first.id;
+      _lignes = [
+        {
+          'compteId': firstAccountId,
+          'debit': 0,
+          'credit': 0,
+          'description': ''
+        },
+        {
+          'compteId': secondAccountId,
+          'debit': 0,
+          'credit': 0,
+          'description': ''
+        },
+      ];
+    }
+
+    if (_lignes.length < 2) {
+      final fallbackAccountId = widget.comptes.length > 1
+          ? widget.comptes[1].id
+          : widget.comptes.first.id;
+      while (_lignes.length < 2) {
+        _lignes.add({
+          'compteId': fallbackAccountId,
+          'debit': 0,
+          'credit': 0,
+          'description': ''
+        });
+      }
+    }
   }
 
   @override
@@ -400,62 +476,46 @@ class _EcritureFormSheetState extends State<_EcritureFormSheet> {
   int get _totalCredit =>
       _lignes.fold<int>(0, (sum, l) => sum + ((l['credit'] as int?) ?? 0));
 
-  bool _validateBusinessRules() {
-    if (_lignes.length < 2) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Une écriture doit contenir au moins 2 lignes.'),
-        ),
-      );
-      return false;
-    }
+  void _setFeedback(String? message, {bool isError = true}) {
+    setState(() {
+      _feedbackMessage = message;
+      _feedbackIsError = isError;
+    });
+  }
 
+  bool _validateBusinessRules() {
     for (int i = 0; i < _lignes.length; i++) {
       final ligne = _lignes[i];
       final debit = (ligne['debit'] as int?) ?? 0;
       final credit = (ligne['credit'] as int?) ?? 0;
 
       if (debit < 0 || credit < 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ligne ${i + 1} : montants négatifs interdits.'),
-          ),
-        );
+        _setFeedback('Ligne ${i + 1} : montants négatifs interdits.');
         return false;
       }
 
       if (debit > 0 && credit > 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content:
-                Text('Ligne ${i + 1} : renseigne soit débit, soit crédit.'),
-          ),
-        );
+        _setFeedback('Ligne ${i + 1} : renseigne soit débit, soit crédit.');
         return false;
       }
 
       if (debit == 0 && credit == 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ligne ${i + 1} : montant débit ou crédit requis.'),
-          ),
-        );
+        _setFeedback('Ligne ${i + 1} : montant débit ou crédit requis.');
         return false;
       }
     }
 
     if (_totalDebit <= 0 || _totalDebit != _totalCredit) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Écriture déséquilibrée: débit ${(_totalDebit / 100).toStringAsFixed(2)} ≠ crédit ${(_totalCredit / 100).toStringAsFixed(2)}',
-          ),
-          backgroundColor: AppTheme.errorColor,
-        ),
+      _setFeedback(
+        'Écriture déséquilibrée: débit ${(_totalDebit / 100).toStringAsFixed(2)} ≠ crédit ${(_totalCredit / 100).toStringAsFixed(2)}',
       );
       return false;
     }
 
+    _setFeedback(
+      'Écriture équilibrée et prête à être enregistrée.',
+      isError: false,
+    );
     return true;
   }
 
@@ -640,6 +700,34 @@ class _EcritureFormSheetState extends State<_EcritureFormSheet> {
               ),
               const SizedBox(height: 8),
 
+              if (_feedbackMessage != null) ...[
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: _feedbackIsError
+                        ? AppTheme.errorColor.withValues(alpha: 0.08)
+                        : AppTheme.successColor.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: _feedbackIsError
+                          ? AppTheme.errorColor.withValues(alpha: 0.25)
+                          : AppTheme.successColor.withValues(alpha: 0.25),
+                    ),
+                  ),
+                  child: Text(
+                    _feedbackMessage!,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: _feedbackIsError
+                              ? AppTheme.errorColor
+                              : AppTheme.successColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ),
+              ],
+
               // Lignes
               for (int i = 0; i < _lignes.length; i++)
                 _LigneCard(
@@ -647,9 +735,18 @@ class _EcritureFormSheetState extends State<_EcritureFormSheet> {
                   index: i,
                   ligne: _lignes[i],
                   comptes: widget.comptes,
-                  canRemove: _lignes.length > 1,
-                  onRemove: () => setState(() => _lignes.removeAt(i)),
-                  onChanged: (updated) => setState(() => _lignes[i] = updated),
+                  canRemove: _lignes.length > 2,
+                  onRemove: () => setState(() {
+                    if (_lignes.length > 2) {
+                      _lignes.removeAt(i);
+                    }
+                  }),
+                  onChanged: (updated) {
+                    setState(() {
+                      _lignes[i] = updated;
+                      _feedbackMessage = null;
+                    });
+                  },
                 ),
 
               const SizedBox(height: 4),

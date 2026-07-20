@@ -10,6 +10,8 @@ import 'package:mayelab_project/pin_setup_page.dart';
 import 'package:mayelab_project/pin_login_page.dart';
 import 'package:mayelab_project/services/auth_service.dart';
 import 'package:mayelab_project/theme/app_theme.dart';
+import 'package:mayelab_project/dashboard_page.dart';
+import 'package:mayelab_project/providers.dart';
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -102,35 +104,61 @@ class _AuthGateState extends State<AuthGate> {
 }
 
 /// Shell principal avec Bottom Navigation (5 onglets)
-class MainShell extends StatefulWidget {
+class MainShell extends ConsumerStatefulWidget {
   const MainShell({super.key});
 
   @override
-  State<MainShell> createState() => _MainShellState();
+  ConsumerState<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell> {
+class _MainShellState extends ConsumerState<MainShell> {
   int _currentIndex = 0;
+  final _ecrituresController = EcrituresPageController();
 
-  final List<Widget> _pages = const [
-    ComptesPage(),
-    EcrituresPage(),
-    JournalPage(),
-    BalancePage(),
-    GrandLivrePage(),
-  ];
+  void _openEcrituresComposer() {
+    setState(() => _currentIndex = 2);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ecrituresController.openComposer();
+    });
+  }
+
+  List<Widget> _buildPages() {
+    return [
+      DashboardPage(
+        onOpenComptes: () => setState(() => _currentIndex = 1),
+        onOpenEcritures: _openEcrituresComposer,
+        onOpenJournal: () => setState(() => _currentIndex = 3),
+        onOpenBalance: () => setState(() => _currentIndex = 4),
+        onOpenGrandLivre: () => setState(() => _currentIndex = 5),
+      ),
+      const ComptesPage(),
+      EcrituresPage(controller: _ecrituresController),
+      const JournalPage(),
+      const BalancePage(),
+      const GrandLivrePage(),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(seedProvider);
+    final pages = _buildPages();
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
-        children: _pages,
+        children: pages,
       ),
       bottomNavigationBar: NavigationBar(
+        height: 70,
+        labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
         selectedIndex: _currentIndex,
         onDestinationSelected: (i) => setState(() => _currentIndex = i),
         destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.space_dashboard_outlined),
+            selectedIcon: Icon(Icons.space_dashboard),
+            label: 'Accueil',
+          ),
           NavigationDestination(
             icon: Icon(Icons.account_tree_outlined),
             selectedIcon: Icon(Icons.account_tree),

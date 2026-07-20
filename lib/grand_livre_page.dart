@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:mayelab_project/db/app_database.dart';
 import 'package:mayelab_project/providers.dart';
 import 'package:mayelab_project/services/grand_livre_pdf_service.dart';
+import 'package:mayelab_project/theme/app_theme.dart';
+import 'package:mayelab_project/widgets/ui_panels.dart';
 
 class GrandLivrePage extends ConsumerStatefulWidget {
   const GrandLivrePage({super.key});
@@ -14,15 +17,31 @@ class GrandLivrePage extends ConsumerStatefulWidget {
 class _GrandLivrePageState extends ConsumerState<GrandLivrePage> {
   Compte? _selectedCompte;
 
+  String _formatMoney(int cents) {
+    return NumberFormat('#,##0.00', 'fr_FR').format(cents / 100);
+  }
+
   @override
   Widget build(BuildContext context) {
     final comptesAsync = ref.watch(comptesStreamProvider);
+    final lignesAsync = _selectedCompte == null
+        ? null
+        : ref.watch(grandLivreProvider(_selectedCompte!.id));
+
+    int totalDebit = 0;
+    int totalCredit = 0;
+    if (lignesAsync != null) {
+      lignesAsync.whenData((lignes) {
+        for (final ligne in lignes) {
+          totalDebit += ligne.ligne.debit;
+          totalCredit += ligne.ligne.credit;
+        }
+      });
+    }
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Grand Livre'),
-        backgroundColor: Colors.indigo,
-        foregroundColor: Colors.white,
         actions: [
           if (_selectedCompte != null)
             IconButton(
@@ -42,58 +61,82 @@ class _GrandLivrePageState extends ConsumerState<GrandLivrePage> {
             ),
         ],
       ),
-      body: Column(
-        children: [
-          // -- Dropdown sélection compte --
-          Container(
-            color: Colors.indigo.shade50,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: comptesAsync.when(
-              loading: () => const CircularProgressIndicator(),
-              error: (e, _) => Text('Erreur: $e'),
-              data: (comptes) => DropdownButtonFormField<Compte>(
-                initialValue: _selectedCompte,
-                decoration: InputDecoration(
-                  labelText: 'Sélectionner un compte',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                  prefixIcon: const Icon(Icons.account_balance),
+      body: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+        child: Column(
+          children: [
+            SectionCard(
+              title: 'Compte',
+              trailing: _selectedCompte == null
+                  ? null
+                  : IconButton(
+                      onPressed: () => setState(() => _selectedCompte = null),
+                      icon: const Icon(Icons.close),
+                      tooltip: 'Réinitialiser',
+                    ),
+              child: comptesAsync.when(
+                loading: () => const Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: CircularProgressIndicator(),
                 ),
-                items: comptes.map((c) {
-                  return DropdownMenuItem<Compte>(
-                    value: c,
-                    child: Text('${c.code} — ${c.nom}'),
-                  );
-                }).toList(),
-                onChanged: (val) => setState(() => _selectedCompte = val),
+                error: (e, _) => Text('Erreur: $e'),
+                data: (comptes) => DropdownButtonFormField<Compte>(
+                  initialValue: _selectedCompte,
+                  decoration: const InputDecoration(
+                    labelText: 'Sélectionner un compte',
+                    prefixIcon: Icon(Icons.account_balance_wallet_outlined),
+                  ),
+                  items: comptes
+                      .map((c) => DropdownMenuItem<Compte>(
+                            value: c,
+                            child: Text('${c.code} — ${c.nom}'),
+                          ))
+                      .toList(),
+                  onChanged: (val) => setState(() => _selectedCompte = val),
+                ),
               ),
             ),
-          ),
-
-          // -- Contenu grand livre --
-          Expanded(
-            child: _selectedCompte == null
-                ? const Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.menu_book_outlined,
-                            size: 64, color: Colors.grey),
-                        SizedBox(height: 12),
-                        Text(
-                          'Sélectionnez un compte\npour voir ses mouvements',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.grey, fontSize: 16),
-                        ),
-                      ],
+            const SizedBox(height: 10),
+            if (_selectedCompte != null)
+              SectionCard(
+                title: 'Synthèse',
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    MetricChip(
+                      label: 'Total débit',
+                      value: _formatMoney(totalDebit),
+                      color: AppTheme.primaryColor,
                     ),
-                  )
-                : _GrandLivreTable(compte: _selectedCompte!),
-          ),
-        ],
+                    MetricChip(
+                      label: 'Total crédit',
+                      value: _formatMoney(totalCredit),
+                      color: AppTheme.secondaryColor,
+                    ),
+                    MetricChip(
+                      label: 'Solde net',
+                      value: _formatMoney(totalDebit - totalCredit),
+                      color: (totalDebit - totalCredit) >= 0
+                          ? Colors.blue.shade700
+                          : Colors.red.shade700,
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 10),
+            Expanded(
+              child: _selectedCompte == null
+                  ? const EmptyStatePanel(
+                      icon: Icons.menu_book_outlined,
+                      title: 'Aucun compte sélectionné',
+                      message:
+                          'Choisis un compte pour afficher le grand livre.',
+                    )
+                  : _GrandLivreTable(compte: _selectedCompte!),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -107,6 +150,10 @@ class _GrandLivreTable extends ConsumerWidget {
   final Compte compte;
   const _GrandLivreTable({required this.compte});
 
+  String _formatMoney(int cents) {
+    return NumberFormat('#,##0.00', 'fr_FR').format(cents / 100);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final grandLivreAsync = ref.watch(grandLivreProvider(compte.id));
@@ -116,146 +163,93 @@ class _GrandLivreTable extends ConsumerWidget {
       error: (e, _) => Center(child: Text('Erreur: $e')),
       data: (lignes) {
         if (lignes.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.inbox_outlined, size: 64, color: Colors.grey),
-                const SizedBox(height: 12),
-                Text(
-                  'Aucun mouvement pour\n${compte.code} — ${compte.nom}',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.grey, fontSize: 16),
-                ),
-              ],
-            ),
+          return EmptyStatePanel(
+            icon: Icons.inbox_outlined,
+            title: 'Aucun mouvement',
+            message: 'Aucun mouvement pour ${compte.code} — ${compte.nom}.',
           );
         }
 
-        // Calcul totaux et solde cumulé
-        int totalDebit = 0;
-        int totalCredit = 0;
         int solde = 0;
         final rows = <_RowData>[];
 
         for (final gl in lignes) {
-          totalDebit += gl.ligne.debit;
-          totalCredit += gl.ligne.credit;
           solde += gl.ligne.debit - gl.ligne.credit;
           rows.add(_RowData(gl: gl, soldeCumule: solde));
         }
 
-        return Column(
-          children: [
-            // En-tête compte
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: Colors.indigo.shade100,
-              child: Text(
-                '${compte.code} — ${compte.nom}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
-                  color: Colors.indigo,
-                ),
-              ),
-            ),
+        return SectionCard(
+          title: '${compte.code} — ${compte.nom}',
+          child: ListView.separated(
+            itemCount: rows.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (_, i) {
+              final r = rows[i];
+              final date = r.gl.ecriture.date;
+              final dateStr =
+                  date == null ? '—' : DateFormat('dd/MM/yyyy').format(date);
+              final debit = r.gl.ligne.debit;
+              final credit = r.gl.ligne.credit;
 
-            // Tableau
-            Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.vertical,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    headingRowColor: WidgetStateProperty.all(
-                      Colors.indigo.shade50,
-                    ),
-                    columnSpacing: 20,
-                    columns: const [
-                      DataColumn(label: Text('Date')),
-                      DataColumn(label: Text('Référence')),
-                      DataColumn(label: Text('Libellé')),
-                      DataColumn(label: Text('Débit'), numeric: true),
-                      DataColumn(label: Text('Crédit'), numeric: true),
-                      DataColumn(label: Text('Solde'), numeric: true),
-                    ],
-                    rows: rows.map((r) {
-                      final date = r.gl.ecriture.date;
-                      final dateStr = date != null
-                          ? '${date.day.toString().padLeft(2, '0')}/'
-                              '${date.month.toString().padLeft(2, '0')}/'
-                              '${date.year}'
-                          : '—';
-                      final debit = r.gl.ligne.debit / 100;
-                      final credit = r.gl.ligne.credit / 100;
-                      final soldeVal = r.soldeCumule / 100;
-
-                      return DataRow(cells: [
-                        DataCell(Text(dateStr)),
-                        DataCell(Text(r.gl.ecriture.reference ?? '—')),
-                        DataCell(
-                          SizedBox(
-                            width: 200,
-                            child: Text(
-                              r.gl.ecriture.libelle,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            r.gl.ecriture.libelle,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        DataCell(Text(
-                          debit > 0 ? debit.toStringAsFixed(2) : '',
-                          style: const TextStyle(color: Colors.green),
-                        )),
-                        DataCell(Text(
-                          credit > 0 ? credit.toStringAsFixed(2) : '',
-                          style: const TextStyle(color: Colors.red),
-                        )),
-                        DataCell(Text(
-                          soldeVal.toStringAsFixed(2),
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: soldeVal >= 0
-                                ? Colors.green.shade700
-                                : Colors.red.shade700,
-                          ),
-                        )),
-                      ]);
-                    }).toList(),
-                  ),
+                        const SizedBox(width: 8),
+                        Text(
+                          dateStr,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Réf: ${r.gl.ecriture.reference ?? '—'}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        MetricChip(
+                          label: 'Débit',
+                          value: _formatMoney(debit),
+                          color: AppTheme.primaryColor,
+                        ),
+                        MetricChip(
+                          label: 'Crédit',
+                          value: _formatMoney(credit),
+                          color: AppTheme.secondaryColor,
+                        ),
+                        MetricChip(
+                          label: 'Solde cumulé',
+                          value: _formatMoney(r.soldeCumule),
+                          color: r.soldeCumule >= 0
+                              ? Colors.blue.shade700
+                              : Colors.red.shade700,
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-              ),
-            ),
-
-            // Barre totaux
-            Container(
-              color: Colors.indigo.shade50,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  _TotalChip(
-                    label: 'Total Débit',
-                    value: totalDebit / 100,
-                    color: Colors.green,
-                  ),
-                  const SizedBox(width: 16),
-                  _TotalChip(
-                    label: 'Total Crédit',
-                    value: totalCredit / 100,
-                    color: Colors.red,
-                  ),
-                  const SizedBox(width: 16),
-                  _TotalChip(
-                    label: 'Solde Net',
-                    value: (totalDebit - totalCredit) / 100,
-                    color: Colors.indigo,
-                  ),
-                ],
-              ),
-            ),
-          ],
+              );
+            },
+          ),
         );
       },
     );
@@ -270,37 +264,4 @@ class _RowData {
   final GrandLivreLigne gl;
   final int soldeCumule;
   _RowData({required this.gl, required this.soldeCumule});
-}
-
-class _TotalChip extends StatelessWidget {
-  final String label;
-  final double value;
-  final Color color;
-  const _TotalChip(
-      {required this.label, required this.value, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: RichText(
-        text: TextSpan(
-          style: TextStyle(color: color, fontSize: 13),
-          children: [
-            TextSpan(
-                text: '$label : ',
-                style: const TextStyle(fontWeight: FontWeight.normal)),
-            TextSpan(
-                text: value.toStringAsFixed(2),
-                style: const TextStyle(fontWeight: FontWeight.bold)),
-          ],
-        ),
-      ),
-    );
-  }
 }
